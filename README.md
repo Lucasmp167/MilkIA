@@ -10,9 +10,33 @@ Abra `index.html` no navegador, ou sirva a pasta:
 python3 -m http.server 8000   # depois acesse http://localhost:8000
 ```
 
+## Testes
+
+```bash
+npm install && npx playwright install chromium   # só na primeira vez
+npm test
+```
+
+`tests/run.js` cobre:
+- **Integridade:** confere o hash do original, o checksum do backup de 11/11, o inventário de funções de cada setor e se o app continua autocontido.
+- **Telas:** abre todas as telas, setores e abas no celular e no computador, sem erros no console e sem rolagem horizontal.
+- **Fluxos:** fazenda, análise, cronômetro e visita persistem após recarregar; rascunhos são recuperados.
+- **Backup:** importa o arquivo de 11/11; faz ida e volta exportando e importando; recusa arquivos adulterados, truncados ou de versão futura; isola os dados demo; desfaz a importação; protege dados ilegíveis.
+
+Para testar outra cópia do app: `MILKIQ_APP=legacy/milkiq-original-etapa1-2026-11-11.html npm test`. O GitHub Actions roda os testes a cada push.
+
+## Estrutura
+
+```
+index.html        app atual
+legacy/           cópia original congelada (não editar) + SHA256SUMS
+tests/run.js      testes automatizados
+*.json            backup de 11/11 (usado como teste)
+```
+
 ## Origem
 
-O código foi importado do artifact do Claude "MilkIQ · Leite IA" (build `etapa1-2026-11-11`, dados v2). O commit `7ca2e64` é a cópia fiel do original. A única mudança feita depois disso: quando o app roda fora do Claude, a exportação de backup baixa o arquivo pelo navegador, porque a API `window.claude.use("downloads")` só existe dentro do artifact.
+O código foi importado do artifact do Claude "MilkIQ · Leite IA" (build `etapa1-2026-11-11`, dados v2). O commit `7ca2e64` (tag `v-original`, cópia em `legacy/`) é a cópia fiel do original. A única mudança feita depois disso: quando o app roda fora do Claude, a exportação de backup baixa o arquivo pelo navegador, porque a API `window.claude.use("downloads")` só existe dentro do artifact.
 
 ## Módulos (Central da Fazenda, 9 setores)
 

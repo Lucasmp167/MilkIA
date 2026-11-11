@@ -1,0 +1,13 @@
+{
+  "name": "milkiq",
+  "version": "0.2.0",
+  "private": true,
+  "description": "MilkIQ · Leite IA — gestão técnica de ordenha e qualidade do leite",
+  "scripts": {
+    "test": "node tests/run.js",
+    "start": "python3 -m http.server 8000"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

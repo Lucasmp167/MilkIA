@@ -7,4 +7,5 @@
 - Formulários novos que precisem de rascunho entram em `DRF`.
 - Registros com `demo:true`, ou de fazendas `modelo`/`critica`, são dados de demonstração: nunca os misture com os dados reais.
 - O backup precisa continuar compatível com `format:"milkiq-backup", formatVer:1`.
-- Antes de dar uma mudança por concluída, abra a página no Chromium (Playwright) e confira se o console fica sem erros.
+- Antes de dar uma mudança por concluída, rode `npm test`: os testes abrem a página no Chromium e conferem se o console fica sem erros. Ao criar uma tela, função ou setor, inclua-o em `INVENTORY` e nos fluxos de `tests/run.js`.
+- Nunca edite `legacy/`, que é a cópia congelada do original e é conferida por hash.
