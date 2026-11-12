@@ -1,5 +1,5 @@
 /* ===== Etapa 1: segurança dos dados e estabilidade ===== */
-const DATA_VER=7,APP_BUILD="3.6-relatorios-2026-11-12",DEMO_IDS=["modelo","critica"];
+const DATA_VER=7,APP_BUILD="3.7-cronometro-2026-11-12",DEMO_IDS=["modelo","critica"];
 const ARR=["sessions","an","ts","ev","cy","pq","wa","eq","cmp","pl","sv","dx","pc","dg","rf","vs","farms"],MAP=["gl","ob","cr","rp","rm"];
 const LAB={sessions:"Testes de ordenha",an:"Análises de leite",ts:"Avaliações de tetos",ev:"Eventos",cy:"Lavagens CIP",pq:"Produtos químicos",wa:"Análises de água",eq:"Equipamentos",cmp:"Componentes",pl:"Itens de revisão",sv:"Serviços",dx:"Medições",pc:"Peças",dg:"Diagramas",rf:"Referências técnicas",vs:"Visitas",farms:"Fazendas",gl:"Metas de qualidade",ob:"Observações de qualidade",cr:"Referências de limpeza",rp:"Relatório de limpeza",rm:"Relatório de manutenção"};
 const ID=/^[A-Za-z0-9_-]{1,64}$/,clean=s=>String(s==null?"":s).replace(/[<>]/g,"").slice(0,120);

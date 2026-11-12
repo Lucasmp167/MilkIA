@@ -75,6 +75,7 @@ js/21-relfazenda.js relatório da fazenda (uma página, período atual × anteri
 js/22-interface.js apresentação: barra da fazenda, painel, blocos dos setores, formulários recolhidos
 js/23-filtros.js  filtros de período nos gráficos antigos; gráficos de linha e barras com valores
 js/24-relatorios.js relatórios em PDF por setor e relatório completo (geral + todos os setores)
+js/25-cronometragem.js itens do cronômetro personalizáveis por fazenda e relatório da cronometragem (por item + texto geral)
 legacy/           cópia original congelada (não editar) + SHA256SUMS
 tests/run.js      testes automatizados
 *.json            backup de 11/11 (usado como teste)

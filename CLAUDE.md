@@ -27,3 +27,4 @@
 - Interface (`js/22-interface.js`): `render` final; `tidy()` remove do HTML antigo a navegação e os avisos duplicados e formata datas aaaa-mm-dd em texto. Use as cores de texto `--onpr` sobre `--pr`, porque no tema escuro o destaque é claro.
 - Filtros (`js/23-filtros.js`): `withPeriod` restringe as listas (DB e demo) só durante o desenho de um gráfico e as restaura no `finally`. Nunca chame `svS()` dentro desse intervalo.
 - Relatórios (`js/24-relatorios.js`): `REPS` lista o relatório de cada setor; a view `rall` mostra um setor ou todos (`V.rk="all"`) com quebra de página. `rank` antigo delega para `rank2`, para que exista um único ranking.
+- Itens do cronômetro (`js/25-cronometragem.js`): `syncFases(f)` reconstrói `FASES`/`PHN` para a fazenda (`DB.gl[fid].fases`: ordem, nomes, desligados, itens próprios `u1`...). As chaves padrão (pa, pre, fl, so, pos) não mudam, porque alimentam as análises.

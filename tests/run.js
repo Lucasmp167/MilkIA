@@ -112,6 +112,7 @@ const INVENTORY = {
   "Cronômetro por fase, abas e relatório da fazenda": ["phToggle", "phReset", "phSaveCow", "phPanel", "phMeans", "gbar", "sectorStrip", "frel"],
   "Filtros e gráfico de linha": ["perBar", "withPeriod", "fpLim"],
   "Relatórios em PDF": ["rall", "repHtml", "repOpen", "repPrint", "frelBody"],
+  "Cronometragem por item": ["syncFases", "fConfig", "fAdd", "fReset", "cronoReport", "phVals"],
   "Offline / PWA": ["idbMirror", "bootOffline", "restoreFromIdb", "askPersist", "swRegister", "swUpdate", "offlineCard", "installCard", "netNotice"],
   "Etapa 1 – Central": ["sstat", "falerts", "fkpi", "kpiGrid", "tchart", "farmCard", "ficha", "farmDelView", "farmDelete", "farmCounts", "openEdit", "sideNav", "sectorStrip", "bottomNav", "render", "withFarm", "goTab"],
   "Dados/backup": ["ldS", "svS", "migrate", "initData", "drSnap", "drRestore", "buildFile", "bkExport", "bkCopy", "bkAnalyze", "bkApply", "bkUndo", "bkv", "hashHex"],
@@ -994,7 +995,7 @@ test("relatórios: um por setor e o completo (geral + todos os setores) em pági
     const s = await open({ viewport }), p = s.page;
     try {
       await p.evaluate(() => { V.me = "x-sel"; go("frel", "critica"); });
-      ok((await txt(p)).includes("Relatórios em PDF") && (await p.$$(".repit")).length == 7, "central de relatórios com os 7 setores");
+      ok((await txt(p)).includes("Relatórios em PDF") && (await p.$$(".repit")).length == 8, "central de relatórios com os 8 relatórios");
       await p.evaluate(() => repOpen("q"));
       let t = await txt(p);
       eq(await p.evaluate(() => V.v), "rall", "abre o relatório do setor");
@@ -1014,6 +1015,39 @@ test("relatórios: um por setor e o completo (geral + todos os setores) em pági
       noErrors(s.errors);
     } finally { await s.close(); }
   }
+});
+
+test("cronômetro por item: itens personalizáveis (renomear, desligar, ordenar, criar) e relatório da cronometragem com texto geral", async () => {
+  const s = await open(), p = s.page;
+  try {
+    const fid = await mkFarm(p, { name: "Fazenda Itens" });
+    await p.evaluate(fid => { V.o = "cro"; go("sector", fid, 5); }, fid);
+    await p.evaluate(() => { fRename("pre", "Pré-dipping com iodo"); fToggle("est"); fMove("pos", -1); V.fnew = "Teste da caneca"; V.fnewh = "caneca de fundo escuro"; fAdd(); });
+    let t = await txt(p);
+    ok(t.includes("Pré-dipping com iodo") && t.includes("Teste da caneca"), "renomeado e item criado aparecem no painel");
+    const names = await p.$$eval(".ph .phn", x => x.map(e => e.textContent));
+    ok(!names.includes("Estimulação"), "item desligado some do painel: " + names);
+    ok(names.indexOf("Pós-dipping") < names.indexOf("Retirada"), "ordem alterada");
+    await p.evaluate(() => { V.fnew = "teste da CANECA"; fAdd(); });
+    ok((await txt(p)).includes("Já existe um item com esse nome"), "nome repetido recusado");
+    // cronometrar com o item criado e salvar
+    for (const [n, k, v] of [["1", "u1", 12], ["2", "u1", 20], ["3", "pa", 90]]) await p.evaluate(([n, k, v]) => { PT.n = n; PT.t = { [k]: { acc: v, run: false }, pa: { acc: 80 + +n, run: false } }; phSaveCow(); }, [n, k, v]);
+    await p.evaluate(() => { dset("milker", "Ana"); dset("turn", "1"); ssave(); flushAll(); });
+    eq(await p.evaluate(() => [SV.ok, SV.pend, DRP]), [true, false, false], "tudo gravado antes de recarregar");
+    await p.reload(); await p.waitForFunction(() => window.MQ_READY === true);
+    await p.evaluate(fid => { V.o = "rl"; go("sector", fid, 5); }, fid);
+    t = await txt(p);
+    ok(t.includes("Relatório da cronometragem da rotina") && t.includes("Texto geral") && t.includes("Foram cronometradas 3 vacas em 1 teste(s)"), "relatório com texto geral");
+    ok(/Teste da caneca\s*2\s*0:16/.test(t), "item criado no resumo (2 vacas, média 0:16): " + t.slice(t.indexOf("Resumo por item"), t.indexOf("Resumo por item") + 300));
+    ok(t.includes("Não há metas da rotina cadastradas"), "sem metas, sem classificação");
+    ok((await p.$$(".phrep")).length >= 2, "uma seção por item cronometrado");
+    // central de PDFs inclui a cronometragem; demo não pode alterar itens
+    await p.evaluate(() => go("frel", V.f));
+    ok((await txt(p)).includes("Cronometragem da rotina (por item)"), "cronometragem na central de PDFs");
+    await p.evaluate(() => { V.o = "cro"; go("sector", "modelo", 5); fRename("pa", "X"); });
+    ok((await txt(p)).includes("os itens não podem ser alterados") && !(await txt(p)).includes(">X<"), "demo protegida");
+    noErrors(s.errors);
+  } finally { await s.close(); }
 });
 
 /* ===================== 3d. Offline-first: site publicado, modo avião, banco do aparelho ===================== */

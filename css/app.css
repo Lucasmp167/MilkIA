@@ -181,3 +181,10 @@ nav .fab{min-width:74px;padding:10px 14px;margin-top:-26px;border:4px solid var(
 .pbreak{height:0;border-top:1px dashed var(--bd);margin:22px 0}
 @media print{.pbreak{break-before:page;border:0;margin:0}.repsec .card{box-shadow:none;border:0;padding:0}.rephead{border-color:#0f7a55}}
 @media print{.card.report,.repsec .card,.repsec .two,.repsec,details{break-inside:auto}.repsec .ov{overflow:visible}svg.chart{max-height:240px}}
+/* personalização dos itens do cronômetro e relatório da cronometragem */
+.flist{display:flex;flex-direction:column;gap:6px}.fit{display:flex;gap:6px;align-items:center}.fit input{flex:1;min-height:40px}.fit.off input{opacity:.5;text-decoration:line-through}
+.phrep h2{font-size:17px}
+.phrep .two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}.phrep svg.chart{max-height:170px}.phrep .kgrid{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:520px){.phrep .two{grid-template-columns:1fr}.phrep .kgrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media print{.phrep{break-inside:avoid}.phrep svg.chart{max-height:130px}.phrep .kc .kv{font-size:18px}}
+@media print{.repsec .card.phrep,.card.phrep{break-inside:avoid}}
