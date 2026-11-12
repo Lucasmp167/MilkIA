@@ -14,3 +14,5 @@
 - Telas novas não podem mostrar números fixos ou fictícios. Indicadores, status e alertas vêm de `fkpi`, `sstat` e `falerts` (em `js/10-central.js`); sem registro, a tela mostra "Sem dados". Um status só pode ser Bom, Atenção ou Crítico se existir um critério (meta do usuário, faixa cadastrada ou referência verificada).
 - Funções antigas (`QA`, `SS`, `L`, `CYS`, `cls`, `planSt`...) leem a fazenda em `V.f`. Para calcular outra fazenda, use `withFarm(id, fn)`.
 - `sector(1)` (com argumento) devolve a tela "placeholder" com as calculadoras; o Setor 6 usa isso na aba Calculadoras.
+- Equipamentos: os Setores 2 (`js/12-equipamentos.js`) e 8 compartilham `DB.eq/cmp/pl/sv/dx/pc/dg/rf` e os formulários `FS.*`. Nunca crie cadastro paralelo. O equipamento selecionado é `V.me` (no Setor 2, `V.e2`; a tela redefine `V.me` ao desenhar).
+- Medições só são avaliadas por `refFor`/`judge`: a referência precisa estar verificada, ser da mesma marca/modelo e, se tiver ponto, valer só para aquele ponto. Não escreva limites técnicos no código. Causas e ações (`CAUSE`) são só texto qualitativo.

@@ -34,6 +34,7 @@ js/01-base.js     setores, telas principais, navegação
 js/02-…08-*.js    armazenamento, setores 6/5/7/8, dados, backup (código original)
 js/10-central.js  Central da Fazenda, indicadores reais, status, alertas, gráficos, menus
 js/11-fazendas.js cadastro, ficha, edição e exclusão de fazendas
+js/12-equipamentos.js Setor 2: ordenhadeiras, medições, componentes, relatórios
 js/99-inicio.js   partida do app
 tools/bundle.js   gera o arquivo único dist/milkiq.html
 legacy/           cópia original congelada (não editar) + SHA256SUMS
@@ -55,8 +56,8 @@ Cada fazenda tem sua Central, com indicadores, alertas e os 9 setores. O status 
 | # | Setor | Estado |
 |---|-------|--------|
 | 1 | Cadastro da fazenda | **Funcional**: cadastrar, consultar (ficha), editar e excluir com confirmação + desfazer |
-| 2 | Ordenhadeiras e equipamentos | Mostra os equipamentos do Setor 8; módulo próprio na Etapa 2 |
-| 3 | ISO Check | Mostra as medições do Diagnóstico (Setor 8); módulo próprio na Etapa 3 |
+| 2 | Ordenhadeiras e equipamentos | **Funcional**: várias ordenhadeiras por fazenda (GEA e outras marcas), ficha e configuração, componentes por bloco, esquema visual genérico, medições gerais e por ponto, avaliação só com referência verificada, problemas com causas e ações, pendências e histórico por equipamento, diagramas (oficial × não oficial), relatório individual, comparativo outra marca × GEA. Mesmo cadastro do Setor 8 |
+| 3 | ISO Check | Mostra as medições dos equipamentos; módulo próprio na Etapa 3 |
 | 4 | Testes técnicos | Planejado |
 | 5 | Qualidade do leite | **Funcional**: análises, evolução, antes/depois, tetos (escore manual, sem IA), indicadores/metas, relatório |
 | 6 | Otimização da ordenha | **Funcional**: cronômetro, comparação entre ordenhas, ranking, gráficos, histórico, relatório, calculadoras |

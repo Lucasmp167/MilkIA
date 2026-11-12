@@ -99,6 +99,7 @@ const INVENTORY = {
   "Setor 7 – CIP": ["cip", "vCy", "vPq", "vWa", "vGc", "vBc", "vRc", "cysave", "psave", "wsave"],
   "Setor 8 – manutenção": ["man", "vEq", "vMt", "vPc", "vDx", "vG8", "vR8", "cls", "probs"],
   "Fazendas/visitas": ["home", "farm", "kpiv", "sector", "visit", "saveVisit", "newf", "addFarm"],
+  "Etapa 2 – Equipamentos": ["eqv", "eqList", "eqForm", "eqSave", "eqDetail", "eqResumo", "eqMed", "eqCmp", "eqHist", "eqReport", "eqCompare", "eqRefs", "eqSchema", "evalDx", "estat", "epend", "refFor", "judge", "addPt", "e2dgSave", "eqTimeline"],
   "Etapa 1 – Central": ["sstat", "falerts", "fkpi", "kpiGrid", "tchart", "farmCard", "ficha", "farmDelView", "farmDelete", "farmCounts", "openEdit", "sideNav", "sectorStrip", "bottomNav", "render", "withFarm", "goTab"],
   "Dados/backup": ["ldS", "svS", "migrate", "initData", "drSnap", "drRestore", "buildFile", "bkExport", "bkCopy", "bkAnalyze", "bkApply", "bkUndo", "bkv", "hashHex"],
 };
@@ -383,6 +384,187 @@ test("migração v2 → v3: a meta de CCS do cadastro vira meta de qualidade; da
     eq(r, { ver: 3, gl: { ccs: 200 }, an: 1, mig: ["1>2", "2>3"], st: "wa", lh: null }, "migração");
     noErrors(s.errors);
   } finally { await s.close(); }
+});
+
+/* ===================== 3c. Etapa 2: ordenhadeiras e equipamentos ===================== */
+const mkEq = (p, fid, o) => p.evaluate(([fid, o]) => { go("sector", fid, 1); e2new(); Object.assign(FS.eq, o); eqSave(); return V.e2; }, [fid, o]);
+const mkCmp = (p, eid, o) => p.evaluate(([eid, o]) => { V.me = eid; FS.cmp = Object.assign(NEW.cmp(), o); gs("cmp", chk8c); }, [eid, o]);
+const mkDx = (p, eid, o) => p.evaluate(([eid, o]) => { V.me = eid; FE.dx = null; FS.dx = Object.assign(NEW.dx(), o); gs("dx", chkDx2); }, [eid, o]);
+const mkRf = (p, o) => p.evaluate(o => { FE.rf = null; FS.rf = Object.assign(NEW.rf(), o); gs("rf", chkRf); }, o);
+const evalOf = (p, eid) => p.evaluate(eid => { const e = L("eq").find(x => x.id == eid), d = lastOf(L("dx").filter(x => x.eid == eid)), r = evalDx(d, e); return { gen: Object.fromEntries(r.gen.filter(x => x.v != null).map(x => [x.p[0], x.st])), pts: r.pts.map(x => x.pt + ":" + x.st), probs: r.probs.map(x => x.g + "|" + x.t), causes: r.probs.map(x => x.c.length + x.a.length) }; }, eid);
+
+test("equipamentos: várias ordenhadeiras (GEA e outra marca) com cadastro completo, compartilhadas com o Setor 8", async () => {
+  const s = await open(), p = s.page;
+  try {
+    const fid = await mkFarm(p, { name: "Fazenda Eq" });
+    const a = await mkEq(p, fid, { fab: "GEA", mod: "Modelo G", ser: "G1", ano: "2019", tipo: "Linha baixa", sala: "Espinha de peixe", nc: "12", lv: "45", pul: "Alternada", ptx: "60", prel: "65", ll: "76 mm inox", lvac: "50 mm PVC", h: "5000", o: "10000", car: "obs" });
+    const b = await mkEq(p, fid, { fab: "DeLaval", mod: "Modelo D", ser: "D1", nc: "8" });
+    await reload(p);
+    const r = await p.evaluate(() => DB.eq.map(e => [e.fab, e.mod, e.sala, e.nc, e.lv, e.prel, e.ll, e.hist.length]));
+    eq(r, [["GEA", "Modelo G", "Espinha de peixe", "12", "45", "65", "76 mm inox", 1], ["DeLaval", "Modelo D", "", "8", "", "", "", 1]], "equipamentos salvos");
+    // mesmo cadastro no Setor 8; edição lá preserva os campos novos
+    await p.evaluate(fid => { V.m8 = "eq"; go("sector", fid, 7); }, fid);
+    const t8 = await txt(p); ok(t8.includes("Modelo G") && t8.includes("Modelo D"), "Setor 8 não mostra os equipamentos do Setor 2");
+    await p.evaluate(a => { ged("eq", a); FS.eq.car = "editado no S8"; gs("eq", chk8); }, a);
+    eq(await p.evaluate(a => { const e = DB.eq.find(x => x.id == a); return [e.car, e.sala, e.ll, DB.eq.length]; }, a), ["editado no S8", "Espinha de peixe", "76 mm inox", 2], "edição no Setor 8");
+    // edição no Setor 2 registra histórico; validações
+    await p.evaluate(a => { go("sector", V.f, 1); e2edit(a); FS.eq.nc = "14"; eqSave(); }, a);
+    ok((await p.evaluate(a => DB.eq.find(x => x.id == a).hist.map(h => h.t).join("|"), a)).includes("Cadastro alterado: conjuntos"), "histórico da edição");
+    for (const [o, msg] of [[{ fab: "", mod: "X", ser: "1" }, "marca e modelo"], [{ fab: "A", mod: "B", ser: "" }, "número de série"], [{ fab: "A", mod: "B", ser: "1", prel: "120" }, "entre 0 e 100"], [{ fab: "A", mod: "B", ser: "1", ano: "1800" }, "Ano"]]) {
+      await mkEq(p, fid, o); ok((await txt(p)).includes(msg), "validação ausente: " + msg);
+    }
+    eq(await p.evaluate(() => DB.eq.length), 2, "equipamentos inválidos não podem ser gravados");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
+test("diagnóstico: sem referência verificada tudo é “Não avaliado”; com referência, Conforme/Fora com causas e ações", async () => {
+  const s = await open(), p = s.page;
+  try {
+    const fid = await mkFarm(p, { name: "Fazenda Dx" });
+    const e = await mkEq(p, fid, { fab: "GEA", mod: "M1", ser: "1" });
+    const pts = [{ pt: "Coletor / ponta de teto", par: "vac", v: "44" }, { pt: "Unidade final / receptor", par: "vac", v: "45" }];
+    await mkDx(p, e, { date: "2026-11-01", vac: "49", res: "800", A: "150", B: "450", C: "150", D: "250", vaz: "Falha", pts });
+    let r = await evalOf(p, e);
+    eq(r.gen, { vac: "Não avaliado", res: "Não avaliado", rel: "Não avaliado" }, "sem referência");
+    eq(r.pts, ["Coletor / ponta de teto:Não avaliado", "Unidade final / receptor:Não avaliado"], "pontos sem referência");
+    eq(r.probs.length, 1, "só a inspeção (Falha em vazamentos) vira problema");
+    await mkRf(p, { fab: "GEA", par: "vac", min: "44", max: "48", un: "kPa", fonte: "Fonte A", ver: false });
+    eq((await evalOf(p, e)).gen.vac, "Não avaliado", "referência NÃO verificada não pode classificar");
+    await p.evaluate(() => { const r = DB.rf[0]; ged("rf", r.id); FS.rf.ver = true; gs("rf", chkRf); });
+    await mkRf(p, { fab: "GEA", par: "vac", pt: "Coletor / ponta de teto", min: "32", max: "42", un: "kPa", fonte: "Fonte B", ver: true, grav: "Alta" });
+    await mkRf(p, { fab: "OutraMarca", par: "res", min: "1000", un: "L/min", fonte: "Fonte C", ver: true });
+    r = await evalOf(p, e);
+    eq([r.gen.vac, r.gen.res, r.gen.rel], ["Fora", "Não avaliado", "Não avaliado"], "geral (referência de outra marca não se aplica)");
+    eq(r.pts, ["Coletor / ponta de teto:Fora", "Unidade final / receptor:Não avaliado"], "referência por ponto só vale para o ponto");
+    ok(r.probs[0].startsWith("Alta|Vácuo de trabalho — Coletor") && r.probs.some(x => /acima do máximo da referência \(44 a 48 kPa; fonte: Fonte A\)/.test(x)), "problemas: " + r.probs.join(" / "));
+    ok(r.causes.every(n => n >= 2), "cada problema deve trazer causas e ações");
+    await p.evaluate(e => e2open(e, "med"), e);
+    const t = await txt(p);
+    for (const x of ["Causas possíveis", "Ações sugeridas", "sem referência verificada", "Fonte A"]) ok(t.includes(x), "tela de medições sem: " + x);
+    eq(await p.evaluate(fid => sstat(farms.find(f => f.id == fid), 1).st, fid), "cr", "status do Setor 2 (problema de gravidade Alta)");
+    ok(await p.evaluate(fid => falerts(farms.find(f => f.id == fid)).some(a => a.s == 1 && a.eid), fid), "alerta deve apontar para o equipamento no Setor 2");
+    // medição por ponto pela tela: adicionar e remover
+    await p.evaluate(() => { FS.dx = NEW.dx(); PT2 = { pt: "Regulador", par: "vac", v: "abc", obs: "" }; addPt(); });
+    ok((await txt(p)).includes("valor numérico válido"), "valor inválido no ponto deveria ser recusado");
+    await p.evaluate(() => { PT2.v = "47,5"; addPt(); });
+    eq(await p.evaluate(() => FS.dx.pts), [{ pt: "Regulador", par: "vac", v: "47.5", obs: "" }], "ponto adicionado (vírgula decimal)");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
+test("equipamentos: esquema visual e diagramas identificados como não oficiais; oficial exige fonte e documento", async () => {
+  const s = await open(), p = s.page;
+  try {
+    const fid = await mkFarm(p, { name: "Fazenda Esq" });
+    const e = await mkEq(p, fid, { fab: "GEA", mod: "M", ser: "1", nc: "6" });
+    await mkCmp(p, e, { tipo: "Regulador de vácuo", nome: "Regulador A", qtd: "1", cod: "ABC", conf: false });
+    await mkCmp(p, e, { tipo: "Pulsador", nome: "Pulsadores", qtd: "6" });
+    await p.evaluate(e => e2open(e, "cmp"), e);
+    const svg = await p.$eval("svg.schema", x => x.textContent);
+    ok(/Regulador de vácuo\s*1 componente/.test(svg) && /Pulsadores\s*6 componente/.test(svg) && /Bomba de vácuo\s*não cadastrado/.test(svg), "esquema: " + svg.slice(0, 200));
+    const t = await txt(p);
+    ok(t.includes("não é desenho oficial GEA") && t.includes("NÃO confirmado"), "avisos de esquema/código");
+    await p.evaluate(e => { FS.dg = Object.assign(NEW.dg(), { tit: "Vista explodida", fonte: "Manual", ofi: true }); PG = ["data:image/png;base64,iVBORw0KGgo="]; e2dgSave(e); }, e);
+    ok((await txt(p)).includes("exige a identificação do documento"), "oficial sem documento deveria ser recusado");
+    await p.evaluate(e => { FS.dg.doc = "Manual X rev. 3, p. 12"; e2dgSave(e); FS.dg = Object.assign(NEW.dg(), { tit: "Foto", fonte: "Foto do técnico" }); PG = ["data:image/png;base64,iVBORw0KGgo="]; e2dgSave(e); }, e);
+    eq(await p.evaluate(() => DB.dg.map(d => [d.tit, d.ofi, d.eid != ""])), [["Vista explodida", true, true], ["Foto", false, true]], "diagramas");
+    const t2 = await txt(p);
+    ok(t2.includes("Documento oficial informado") && t2.includes("Não oficial"), "identificação oficial / não oficial");
+    // excluir equipamento com registros vinculados é bloqueado
+    await p.evaluate(e => { go("sector", V.f, 1); e2open(e, "res"); e2del(e); e2del(e); }, e);
+    eq(await p.evaluate(() => DB.eq.length), 1, "equipamento com vínculos não pode ser excluído");
+    const only = await mkEq(p, fid, { fab: "GEA", mod: "Só diagrama", ser: "9" });
+    await p.evaluate(e => { e2open(e, "cmp"); FS.dg = Object.assign(NEW.dg(), { tit: "D", fonte: "F" }); PG = ["data:image/png;base64,iVBORw0KGgo="]; e2dgSave(e); e2open(e, "res"); e2del(e); e2del(e); }, only);
+    eq(await p.evaluate(() => DB.eq.length), 2, "equipamento só com diagrama vinculado também não pode ser excluído");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
+test("integração: revisões do Setor 8 viram pendências do equipamento; histórico individual separado por equipamento", async () => {
+  const s = await open(), p = s.page;
+  try {
+    const fid = await mkFarm(p, { name: "Fazenda Int" });
+    const a = await mkEq(p, fid, { fab: "GEA", mod: "A", ser: "1" }), b = await mkEq(p, fid, { fab: "GEA", mod: "B", ser: "2" });
+    await p.evaluate(a => { e2open(a, "res"); FS.pl = Object.assign(NEW.pl(), { nome: "Troca de teteiras", iD: "30", ud: "2026-01-01" }); gs("pl", null); FS.sv = Object.assign(NEW.sv(), { date: "2026-10-10", tipo: "Corretiva", prob: "Vazamento", parts: [{ n: "Mangueira", q: "2", c: "10" }] }); gs("sv", chk8s); }, a);
+    await mkDx(p, a, { date: "2026-10-20", vac: "47" });
+    const pa = await p.evaluate(a => epend(L("eq").find(x => x.id == a)).map(x => x.t), a);
+    ok(pa.some(t => t.startsWith("Revisão atrasada: Troca de teteiras")), "pendência de revisão: " + pa);
+    const ta = await p.evaluate(a => eqTimeline(L("eq").find(x => x.id == a)).map(x => x.t), a), tb = await p.evaluate(b => eqTimeline(L("eq").find(x => x.id == b)).map(x => x.t), b);
+    ok(ta.some(t => t.includes("Serviço (Corretiva): Vazamento") && t.includes("Mangueira ×2")) && ta.some(t => t.startsWith("Medição")), "histórico de A: " + ta);
+    eq(tb, ["Equipamento cadastrado"], "histórico de B não pode ter registros de A");
+    await p.evaluate(a => { e2open(a, "res"); }, a);
+    ok((await txt(p)).includes("Revisão atrasada: Troca de teteiras"), "pendência na tela do equipamento");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
+test("relatórios: diagnóstico individual sem dados demo em fazenda real; comparativo só com registros", async () => {
+  const s = await open(), p = s.page;
+  try {
+    const fid = await mkFarm(p, { name: "Fazenda Rel" });
+    const g = await mkEq(p, fid, { fab: "GEA", mod: "G", ser: "1" });
+    await mkRf(p, { fab: "GEA", par: "vac", min: "44", max: "48", un: "kPa", fonte: "Manual G", ver: true });
+    await mkDx(p, g, { date: "2026-11-01", vac: "46" });
+    await p.evaluate(g => e2open(g, "rl"), g);
+    let t = await txt(p);
+    ok(t.includes("Diagnóstico técnico do equipamento") && t.includes("Conforme") && t.includes("Manual G") && !/DEMO|fictício/i.test(t), "relatório real com dado demo ou sem referência");
+    // comparativo: só GEA → pede outra marca; depois com outra marca
+    await p.evaluate(() => { V.e2 = null; V.e2v = "cmp"; render(); });
+    ok((await txt(p)).includes("Nenhum equipamento de outra marca"), "mensagem sem outra marca");
+    const o = await mkEq(p, fid, { fab: "Outra", mod: "O", ser: "2" });
+    await p.evaluate(() => { V.e2 = null; V.e2edit = false; V.e2v = "cmp"; render(); });
+    t = await txt(p);
+    ok(t.includes("Outra O #2") && t.includes("GEA G #1") && /Vácuo de trabalho\s*Sem dados\s*46 kPa\s*Conforme · ref\. Manual G/.test(t), "comparativo: " + t.slice(0, 300));
+    ok(!t.includes("Fazenda Crítica") && !/DEMO/.test(t), "comparativo real não pode usar equipamentos demo");
+    // demo: relatório identificado
+    await p.evaluate(() => { V.e2 = null; go("sector", "critica", 1); e2open(L("eq")[0].id, "rl"); });
+    ok((await txt(p)).includes("DADOS DE DEMONSTRAÇÃO"), "relatório demo deve ser identificado");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
+test("equipamentos: telas do Setor 2 no celular e no computador sem erro e sem rolagem lateral", async () => {
+  for (const viewport of [{ width: 390, height: 844 }, { width: 1366, height: 900 }]) {
+    const s = await open({ viewport }), p = s.page;
+    try {
+      const bad = [];
+      for (const fid of ["modelo", "critica"]) {
+        for (const v of ["list", "cmp", "ref"]) { await p.evaluate(([fid, v]) => { V.e2 = null; V.e2v = v; go("sector", fid, 1); }, [fid, v]); }
+        const ids = await p.evaluate(() => L("eq").map(e => e.id));
+        for (const id of ids) for (const t of ["res", "med", "cmp", "his", "rl"]) {
+          await p.evaluate(([id, t]) => e2open(id, t), [id, t]);
+          const w = await p.evaluate(() => [document.documentElement.scrollWidth, innerWidth]);
+          if (w[0] > w[1] + 1) bad.push(`${fid}:${id}:${t}`);
+        }
+      }
+      await p.evaluate(() => { go("sector", "modelo", 1); e2new(); });
+      ok(!bad.length, `rolagem lateral (${viewport.width}px): ` + bad.join(", "));
+      noErrors(s.errors);
+    } finally { await s.close(); }
+  }
+});
+
+test("backup: equipamentos, medições por ponto e diagramas sobrevivem a exportar → importar", async () => {
+  const s = await open(), p = s.page;
+  let exp;
+  try {
+    const fid = await mkFarm(p, { name: "Fazenda BkEq" });
+    const e = await mkEq(p, fid, { fab: "GEA", mod: "M", ser: "1", sala: "Rotativa", lv: "44" });
+    await mkDx(p, e, { date: "2026-11-01", vac: "46", pts: [{ pt: "Regulador", par: "vac", v: "45" }] });
+    await mkRf(p, { fab: "GEA", par: "vac", pt: "Regulador", min: "40", max: "50", fonte: "F", doc: "D", ver: true });
+    exp = await exportFile(p);
+  } finally { await s.close(); }
+  const s2 = await open(), p2 = s2.page;
+  try {
+    await p2.evaluate(() => go("backup"));
+    await p2.setInputFiles('input[type=file][accept*=json]', exp.file);
+    await p2.waitForFunction(() => BK.rep && BK.rep.ok);
+    await p2.click("text=Importar (adicionar novos)");
+    const r = await p2.evaluate(() => [DB.eq[0].sala, DB.eq[0].lv, DB.eq[0].hist.length, DB.dx[0].pts, DB.rf[0].pt, DB.rf[0].doc]);
+    eq(r, ["Rotativa", "44", 1, [{ pt: "Regulador", par: "vac", v: "45" }], "Regulador", "D"], "dados após importar");
+    noErrors(s2.errors);
+  } finally { await s2.close(); }
 });
 
 /* ===================== 4. Backup ===================== */

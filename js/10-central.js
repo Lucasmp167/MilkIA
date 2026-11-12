@@ -8,7 +8,7 @@
  */
 ST.sd = "Sem dados"; ST.in = "Registrado";
 const RANK = { cr: 4, wa: 3, ok: 2, in: 1, na: 1, sd: 0 };
-const TABKEY = { 4: "q", 5: "o", 6: "c", 7: "m8" }; // aba ativa de cada setor com abas
+const TABKEY = { 1: "e2t", 4: "q", 5: "o", 6: "c", 7: "m8" }; // aba ativa de cada setor com abas
 
 function withFarm(id, fn) { const old = V.f; V.f = id; try { return fn(); } finally { V.f = old; } }
 const fmtD = d => d ? String(d).slice(0, 10).split("-").reverse().join("/") : "—";
@@ -18,7 +18,7 @@ const realFarms = () => farms.filter(f => !f.demo), demoFarms = () => farms.filt
 const pos = v => typeof v == "number" && isFinite(v) && v > 0;
 
 /* Abre um setor já na aba certa (menos cliques). */
-function goTab(s, tab, fid) { if (TABKEY[s] && tab) V[TABKEY[s]] = tab; V.note = null; go("sector", fid || V.f, s); }
+function goTab(s, tab, fid, eid) { if (TABKEY[s] && tab) V[TABKEY[s]] = tab; if (eid) { V.e2 = eid; V.me = eid; } else if (s == 1) V.e2 = null; V.e2edit = false; V.note = null; go("sector", fid || V.f, s); }
 
 /* Série de um parâmetro de análise de leite: [{d, v}] em ordem de data. */
 function anSeries(k) { return QA().filter(x => x[k] != null && !isNaN(x[k])).map(x => ({ d: x.date, v: x[k] })); }
@@ -30,9 +30,12 @@ const SSTAT = [
     const miss = S1REQ.filter(([k]) => typeof f[k] == "number" ? !(f[k] > 0) : !f[k] || f[k] == "—").map(x => x[1]);
     return miss.length ? { st: "wa", lab: "Incompleto", t: "Falta: " + miss.join(", ") } : { st: "ok", lab: "Completo", t: `${f.cows} vacas · ${f.milking} em lactação · ${fm(f.liters, 0)} L/dia` };
   },
-  /* 2 Ordenhadeiras */ () => {
-    const es = L("eq");
-    return es.length ? { st: "in", lab: "Cadastrado", t: `${es.length} equipamento(s): ${es.slice(0, 2).map(eqt).join(", ")}${es.length > 2 ? "…" : ""}` } : { st: "sd", t: "Nenhum equipamento cadastrado" };
+  /* 2 Ordenhadeiras — pior situação entre os equipamentos (última medição de cada um) */ () => {
+    const es = L("eq"); if (!es.length) return { st: "sd", t: "Nenhum equipamento cadastrado" };
+    const ss = es.map(estat), w = ss.reduce((a, s) => RANK[s.st] > RANK[a.st] ? s : a, { st: "sd" });
+    const nm = ss.filter(s => s.lab == "Sem medição").length, np = ss.filter(s => s.st == "cr" || s.st == "wa").length;
+    const t = `${es.length} equipamento(s)${np ? ` · ${np} com problema` : ""}${nm ? ` · ${nm} sem medição` : ""}`;
+    return w.st == "cr" || w.st == "wa" || w.st == "ok" ? { st: w.st, t } : { st: "in", lab: "Cadastrado", t };
   },
   /* 3 ISO Check — por enquanto usa os diagnósticos de vácuo/pulsação do Setor 8 */ () => {
     let nF = 0, nC = 0, nN = 0, hi = false, any = false, last = "";
@@ -108,7 +111,7 @@ function falerts(f) {
       P.filter(p => num(p.estmin) != null && stock(p) <= num(p.estmin)).forEach(p => add("wa", `Estoque baixo de ${p.nome}: ${fm(stock(p), 1)} ${p.un || ""}`, 6, "pq"));
       L("eq").forEach(e => {
         const d = lastOf(L("dx").filter(x => x.eid == e.id)); if (!d) return;
-        probs(d, e).forEach(p => add(p.g == "Alta" ? "cr" : "wa", `${eqt(e)} (${fmtD(d.date)}): ${p.t}`, 7, "dx"));
+        evalDx(d, e).probs.forEach(p => A.push({ l: p.g == "Alta" ? "cr" : "wa", t: `${eqt(e)} (${fmtD(d.date)}): ${p.t}`, s: 1, tab: "med", eid: e.id }));
       });
     } catch (e) { add("wa", "Não foi possível calcular todos os alertas desta fazenda", 0); }
     return A.sort((a, b) => (RANK[b.l] || 0) - (RANK[a.l] || 0));
@@ -117,7 +120,7 @@ function falerts(f) {
 function alertList(f, max) {
   const A = falerts(f), sh = max ? A.slice(0, max) : A;
   if (!A.length) return '<div class="card mu">Nenhum alerta com base nos registros desta fazenda.</div>';
-  return `<div class="alist">${sh.map(a => `<div class="alert ${a.l}" style="border-color:currentColor" onclick="goTab(${a.s},'${a.tab || ""}','${f.id}')"><span style="color:var(--tx)">${E(a.t)}</span><span class="go">Setor ${a.s + 1} ›</span></div>`).join("")}${max && A.length > max ? `<p class="mu">+ ${A.length - max} alerta(s). <button class="btn s" onclick="go('kpi','${f.id}')">Ver todos</button></p>` : ""}</div>`;
+  return `<div class="alist">${sh.map(a => `<div class="alert ${a.l}" style="border-color:currentColor" onclick="goTab(${a.s},'${a.tab || ""}','${f.id}'${a.eid ? `,'${a.eid}'` : ""})"><span style="color:var(--tx)">${E(a.t)}</span><span class="go">Setor ${a.s + 1} ›</span></div>`).join("")}${max && A.length > max ? `<p class="mu">+ ${A.length - max} alerta(s). <button class="btn s" onclick="go('kpi','${f.id}')">Ver todos</button></p>` : ""}</div>`;
 }
 
 /* ---------- indicadores (KPIs) reais ---------- */
@@ -158,17 +161,19 @@ function kpiGrid(K) {
 function tchart(pts, o = {}) {
   pts = pts.filter(p => p.v != null && !isNaN(p.v));
   if (!pts.length) return '<p class="mu">Sem dados.</p>';
-  const W = 640, H = 210, L0 = 46, R0 = 14, T0 = 14, B0 = 28, vs = pts.map(p => p.v).concat(o.goal != null ? [o.goal] : []);
+  const W = 640, H = 210, L0 = 46, R0 = 14, T0 = 14, B0 = 28, vs = pts.map(p => p.v).concat([o.goal, o.lo, o.hi].filter(x => x != null && !isNaN(x)));
   let mx = Math.max(...vs), mn = Math.min(...vs); const pad = (mx - mn) * .12 || Math.abs(mx) * .1 || 1; mx += pad; mn = Math.max(o.zero === false ? mn - pad : 0, mn - pad);
   const X = i => L0 + (pts.length == 1 ? (W - L0 - R0) / 2 : i * (W - L0 - R0) / (pts.length - 1)), Y = v => T0 + (mx - v) / (mx - mn || 1) * (H - T0 - B0), d = o.dec || 0;
   const yt = [mn, (mn + mx) / 2, mx].map(v => `<line class="ax" x1="${L0}" x2="${W - R0}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${L0 - 6}" y="${Y(v) + 4}" text-anchor="end">${fm(v, d)}</text>`).join("");
   const xi = [...new Set([0, Math.floor((pts.length - 1) / 2), pts.length - 1])];
   const xt = xi.map(i => `<text x="${X(i)}" y="${H - 8}" text-anchor="${pts.length == 1 ? "middle" : i == 0 ? "start" : i == pts.length - 1 ? "end" : "middle"}">${fmtD(pts[i].d).slice(0, 5)}${i == pts.length - 1 || i == 0 ? "/" + String(pts[i].d).slice(2, 4) : ""}</text>`).join("");
   const gl = o.goal != null ? `<line class="gl" x1="${L0}" x2="${W - R0}" y1="${Y(o.goal)}" y2="${Y(o.goal)}"/><text x="${W - R0}" y="${Y(o.goal) - 5}" text-anchor="end" style="fill:var(--wa)">meta ${fm(o.goal, d)}</text>` : "";
+  const band = [["lo", "mín."], ["hi", "máx."]].filter(([k]) => o[k] != null && !isNaN(o[k])).map(([k, l]) => `<line class="gl" x1="${L0}" x2="${W - R0}" y1="${Y(o[k])}" y2="${Y(o[k])}"/><text x="${L0 + 4}" y="${Y(o[k]) - 5}" style="fill:var(--wa)">${l} ${fm(o[k], d)}</text>`).join("");
+  const out = p => (o.lo != null && p.v < o.lo) || (o.hi != null && p.v > o.hi) || (o.goal != null && p.v > o.goal);
   const c = o.color || "var(--pr)", ln = pts.length > 1 ? `<polyline fill="none" stroke="${c}" stroke-width="2.4" stroke-linejoin="round" points="${pts.map((p, i) => X(i) + "," + Y(p.v)).join(" ")}"/>` : "";
-  const dots = pts.map((p, i) => `<circle cx="${X(i)}" cy="${Y(p.v)}" r="${pts.length > 30 ? 2 : 3.2}" fill="${o.goal != null && p.v > o.goal ? "var(--wa)" : c}"><title>${fmtD(p.d)}: ${fm(p.v, d)}${o.u ? " " + o.u : ""}</title></circle>`).join("");
+  const dots = pts.map((p, i) => `<circle cx="${X(i)}" cy="${Y(p.v)}" r="${pts.length > 30 ? 2 : 3.2}" fill="${out(p) ? "var(--wa)" : c}"><title>${fmtD(p.d)}: ${fm(p.v, d)}${o.u ? " " + o.u : ""}</title></circle>`).join("");
   const l = lastOf(pts);
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${E(o.label || "gráfico")}">${yt}${gl}${ln}${dots}${xt}<text x="${X(pts.length - 1)}" y="${Y(l.v) - 8}" text-anchor="end" style="fill:var(--tx);font-weight:700">${fm(l.v, d)}</text></svg>`;
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${E(o.label || "gráfico")}">${yt}${gl}${band}${ln}${dots}${xt}<text x="${X(pts.length - 1)}" y="${Y(l.v) - 8}" text-anchor="end" style="fill:var(--tx);font-weight:700">${fm(l.v, d)}</text></svg>`;
 }
 const chartCard = (t, sub, svg) => `<div class="card"><div class="top"><b>${t}</b><span class="mu">${sub || ""}</span></div>${svg}</div>`;
 
@@ -199,7 +204,7 @@ function home() {
     + `<div class="banner">Os dados ficam neste navegador e neste aparelho (sem sincronização). Faça backups em <b>Dados</b>. Esta versão não faz análise automática por IA.</div>`;
 }
 
-const QUICK = [["🥛", "Análise de leite", 4, "an"], ["⏱️", "Teste de ordenha", 5, "cro"], ["🧼", "Lavagem CIP", 6, "cy"], ["🛠️", "Manutenção", 7, "mt"], ["📏", "Diagnóstico", 7, "dx"]];
+const QUICK = [["🥛", "Análise de leite", 4, "an"], ["⏱️", "Teste de ordenha", 5, "cro"], ["🧼", "Lavagem CIP", 6, "cy"], ["🛠️", "Manutenção", 7, "mt"], ["⚙️", "Medição de equipamento", 1, "med"]];
 function farm() {
   const f = F(), ss = allStat(f), o = overall(ss);
   return `<div class="pagehead"><div style="min-width:0"><div class="crumb"><button onclick="go('home')">Fazendas</button></div><h1>${E(f.name)} ${f.demo ? '<span class="demo">DEMONSTRAÇÃO</span>' : ""}</h1><div class="mu">${E(f.producer)} · ${E(f.city)}</div></div><div class="acts">${badge(o)}<button class="btn s" onclick="go('sector','${f.id}',0)">Ficha${f.demo ? "" : " / editar"}</button></div></div>`
@@ -234,8 +239,7 @@ function kpiv() {
 
 /* Complementos das telas dos setores 2, 3 e 9 (ainda sem módulo próprio): mostram o que já existe. */
 const SEXTRA = {
-  1: f => withFarm(f.id, () => { const es = L("eq"); return `<h2>Equipamentos desta fazenda</h2>${es.length ? es.map(e => `<div class="card tap" onclick="V.me='${e.id}';goTab(7,'eq')"><div class="top"><b>${E(eqt(e))}</b>${e.demo ? '<span class="demo">DEMO</span>' : ""}</div><p class="mu">${E(e.tipo || "—")} · ${e.nc || "—"} conjuntos</p></div>`).join("") : '<div class="card mu">Nenhum equipamento cadastrado.</div>'}<button class="btn s" onclick="goTab(7,'eq')">Abrir cadastro de equipamentos (Setor 8)</button><p class="mu">Na Etapa 2, este setor passa a ser a central das ordenhadeiras, usando o mesmo cadastro.</p>`; }),
-  2: f => withFarm(f.id, () => { const r = []; L("eq").forEach(e => { const d = lastOf(L("dx").filter(x => x.eid == e.id)); if (d) r.push({ e, d, c: cls(d, e) }); }); return `<h2>Medições existentes (Diagnóstico do Setor 8)</h2>${r.length ? r.map(x => `<div class="card"><b>${E(eqt(x.e))} · ${fmtD(x.d.date)}</b><p class="mu">${x.c.map(c => `${c.p[1]}: ${c.v == null ? "—" : fm(c.v, c.p[3])} ${c.p[2]} (${c.st})`).join(" · ")}</p></div>`).join("") : '<div class="card mu">Nenhuma medição registrada.</div>'}<button class="btn s" onclick="goTab(7,'dx')">Abrir diagnóstico (Setor 8)</button>`; }),
+  2: f => withFarm(f.id, () => { const r = []; L("eq").forEach(e => { const d = lastOf(L("dx").filter(x => x.eid == e.id)); if (d) r.push({ e, d, c: cls(d, e) }); }); return `<h2>Medições existentes (Diagnóstico do Setor 8)</h2>${r.length ? r.map(x => `<div class="card"><b>${E(eqt(x.e))} · ${fmtD(x.d.date)}</b><p class="mu">${x.c.map(c => `${c.p[1]}: ${c.v == null ? "—" : fm(c.v, c.p[3])} ${c.p[2]} (${c.st})`).join(" · ")}</p></div>`).join("") : '<div class="card mu">Nenhuma medição registrada.</div>'}<button class="btn s" onclick="goTab(1,'med')">Abrir medições dos equipamentos (Setor 2)</button>`; }),
   8: f => `<h2>Relatórios disponíveis</h2><div class="ctr">${[[4, "🥛 Qualidade do leite"], [5, "⏱️ Otimização da ordenha"], [6, "🧼 Limpeza CIP"], [7, "🛠️ Manutenção"]].map(([s, l]) => { const st = sstat(f, s); return `<button class="sec" style="min-height:0" onclick="goTab(${s},'rl')"><b>${l}</b>${badge(st.st == "sd" ? st : { st: "in", lab: "Abrir relatório" })}</button>`; }).join("")}</div>`
 };
 
