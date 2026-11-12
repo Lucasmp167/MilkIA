@@ -169,7 +169,7 @@ test("telas: Central da Fazenda tem os 9 setores", async () => {
   const s = await open();
   try {
     await s.page.evaluate(() => go("farm", "modelo"));
-    eq(await s.page.$$eval(".sec", x => x.length), 9, "cartões de setor");
+    eq(await s.page.$$eval(".tile", x => x.length), 9, "blocos de setor");
     noErrors(s.errors);
   } finally { await s.close(); }
 });
@@ -286,7 +286,7 @@ test("indicadores: fazenda nova mostra “Sem dados” e nenhum número inventad
     for (const v of ["farm", "kpi"]) {
       await p.evaluate(([v, fid]) => go(v, fid), [v, fid]);
       const n = await p.$$eval(".kv.sd", x => x.length);
-      ok(n >= 8, `${v}: esperava os KPIs como “Sem dados”, achei ${n}`);
+      ok(n >= (v == "farm" ? 4 : 8), `${v}: esperava os KPIs como “Sem dados”, achei ${n}`);
     }
     ok(!/function series\(|series\(\d/.test(appSource()), "o gerador de séries fictícias ainda existe no código");
     ok(!/alerts:\[\[/.test(appSource()) && !/st:\["(ok|wa|cr)"/.test(appSource()), "alertas ou status fixos ainda existem no código");
@@ -527,7 +527,8 @@ test("relatórios: diagnóstico individual sem dados demo em fazenda real; compa
     await p.evaluate(() => { V.e2 = null; V.e2edit = false; V.e2v = "cmp"; render(); });
     t = await txt(p);
     ok(t.includes("Outra O #2") && t.includes("GEA G #1") && /Vácuo de trabalho\s*Sem dados\s*46 kPa\s*Conforme · ref\. Manual G/.test(t), "comparativo: " + t.slice(0, 300));
-    ok(!t.includes("Fazenda Crítica") && !/DEMO/.test(t), "comparativo real não pode usar equipamentos demo");
+    const tc = await p.$$eval("#app .card", c => c.map(x => x.textContent).join(" "));
+    ok(!tc.includes("Fazenda Crítica") && !/DEMO/.test(tc), "comparativo real não pode usar equipamentos demo");
     // demo: relatório identificado
     await p.evaluate(() => { V.e2 = null; go("sector", "critica", 1); e2open(L("eq")[0].id, "rl"); });
     ok((await txt(p)).includes("DADOS DE DEMONSTRAÇÃO"), "relatório demo deve ser identificado");

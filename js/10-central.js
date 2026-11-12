@@ -183,7 +183,7 @@ function tchart(pts, o = {}) {
 const chartCard = (t, sub, svg) => `<div class="card"><div class="top"><b>${t}</b><span class="mu">${sub || ""}</span></div>${svg}</div>`;
 
 /* ---------- telas ---------- */
-const demoNote = f => f.demo ? '<div class="banner"><b>Fazenda de demonstração.</b> Todos os registros desta fazenda são fictícios (marcados DEMO), ficam separados dos seus dados e nunca entram no backup como dados reais.</div>' : "";
+const demoNote = f => f.demo ? '<div class="banner"><b>Fazenda de demonstração</b>: registros fictícios (DEMO), separados dos seus dados.</div>' : "";
 function farmHead(f, title, sub) {
   return `<div class="pagehead"><div style="min-width:0"><div class="crumb"><button onclick="go('home')">Fazendas</button>${title ? ` › <button onclick="go('farm','${f.id}')">${E(f.name)}</button>` : ""}</div><h1>${title || E(f.name)} ${f.demo ? '<span class="demo">DEMONSTRAÇÃO</span>' : ""}</h1><div class="mu">${sub != null ? sub : E(f.producer) + " · " + E(f.city)}</div></div></div>`;
 }
