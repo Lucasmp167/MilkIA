@@ -162,8 +162,9 @@ function kpiGrid(K) {
 }
 
 /* ---------- gráfico temporal com eixos, datas e meta ---------- */
+let TCH_LIM = ""; // período ativo (data mínima) para os gráficos da tela Indicadores
 function tchart(pts, o = {}) {
-  pts = pts.filter(p => p.v != null && !isNaN(p.v));
+  pts = pts.filter(p => p.v != null && !isNaN(p.v) && (!TCH_LIM || String(p.d) >= TCH_LIM));
   if (!pts.length) return '<p class="mu">Sem dados.</p>';
   const W = 640, H = 210, L0 = 46, R0 = 14, T0 = 14, B0 = 28, vs = pts.map(p => p.v).concat([o.goal, o.lo, o.hi].filter(x => x != null && !isNaN(x)));
   let mx = Math.max(...vs), mn = Math.min(...vs); const pad = (mx - mn) * .12 || Math.abs(mx) * .1 || 1; mx += pad; mn = Math.max(o.zero === false ? mn - pad : 0, mn - pad);
@@ -211,7 +212,7 @@ function home() {
 const QUICK = [["🥛", "Análise de leite", 4, "an"], ["⏱️", "Teste de ordenha", 5, "cro"], ["🧼", "Lavagem CIP", 6, "cy"], ["🛠️", "Manutenção", 7, "mt"], ["⚙️", "Medição de equipamento", 1, "med"], ["📏", "Auditoria ISO", 2, "form"], ["🔧", "Leite residual", 3, "form"]];
 function farm() {
   const f = F(), ss = allStat(f), o = overall(ss);
-  return `<div class="pagehead"><div style="min-width:0"><div class="crumb"><button onclick="go('home')">Fazendas</button></div><h1>${E(f.name)} ${f.demo ? '<span class="demo">DEMONSTRAÇÃO</span>' : ""}</h1><div class="mu">${E(f.producer)} · ${E(f.city)}</div></div><div class="acts">${badge(o)}<button class="btn s" onclick="go('sector','${f.id}',0)">Ficha${f.demo ? "" : " / editar"}</button></div></div>`
+  return `<div class="pagehead"><div style="min-width:0"><div class="crumb"><button onclick="go('home')">Fazendas</button></div><h1>${E(f.name)} ${f.demo ? '<span class="demo">DEMONSTRAÇÃO</span>' : ""}</h1><div class="mu">${E(f.producer)} · ${E(f.city)}</div></div><div class="acts">${badge(o)}${f.demo ? "" : `<button class="btn s" onclick="gvStart()">${gvActive(f.id) ? "📋 Continuar visita" : "▶ Iniciar visita"}</button>`}<button class="btn s" onclick="go('sector','${f.id}',0)">Ficha${f.demo ? "" : " / editar"}</button></div></div>`
     + farmSwitch(f) + demoNote(f)
     + `<div class="quick noprint">${QUICK.map(q => `<button onclick="goTab(${q[2]},'${q[3]}')">＋ ${q[0]} ${q[1]}</button>`).join("")}<button onclick="VF=Object.assign(newVF(),{fid:'${f.id}'});VE=null;go('visit')">＋ 📝 Visita</button></div>`
     + `<h2>Indicadores</h2>${kpiGrid(fkpi(f).slice(0, 8))}<p class="mu"><button class="btn s" onclick="go('kpi','${f.id}')">📊 Ver gráficos e todos os indicadores</button></p>`
@@ -225,20 +226,24 @@ function farmSwitch(f) {
   return `<div class="hide-d noprint" style="margin:0 0 6px"><select aria-label="Trocar de fazenda" onchange="go(V.v=='kpi'?'kpi':'farm',this.value)">${realFarms().length ? `<optgroup label="Minhas fazendas">${opt(realFarms())}</optgroup>` : ""}<optgroup label="Demonstração">${opt(demoFarms())}</optgroup></select></div>`;
 }
 
+const KP = [["90", "3 meses"], ["180", "6 meses"], ["365", "12 meses"], ["", "Tudo"]];
 function kpiv() {
-  const f = F(), g = gls(f);
+  const f = F(), g = gls(f), kp = V.kp == null ? "365" : V.kp;
+  TCH_LIM = kp ? DD(TD(), -kp) : "";
   const ch = withFarm(f.id, () => {
     const ss = SS(), C = [];
     C.push(chartCard("CCS", "mil células/mL", tchart(anSeries("ccs"), { goal: g.ccs, color: "var(--cr)", u: "mil/mL", label: "CCS" })));
     C.push(chartCard("CBT", "mil UFC/mL", tchart(anSeries("cbt"), { goal: g.cbt, color: "var(--wa)", u: "mil UFC/mL", label: "CBT" })));
     C.push(chartCard("Gordura e proteína", "%", `<p class="mu">Gordura</p>${tchart(anSeries("gor"), { dec: 2, zero: false, label: "Gordura" })}<p class="mu">Proteína</p>${tchart(anSeries("pro"), { dec: 2, zero: false, color: "var(--in)", label: "Proteína" })}`));
+    C.push(chartCard("Lactose e sólidos totais", "%", `<p class="mu">Lactose</p>${tchart(anSeries("lac"), { dec: 2, zero: false, label: "Lactose" })}<p class="mu">Sólidos totais</p>${tchart(anSeries("st"), { dec: 2, zero: false, color: "var(--in)", label: "Sólidos totais" })}`));
     C.push(chartCard("Litros/hora por teste de ordenha", "L/h", tchart(ss.filter(s => s.dur && s.litros).map(s => ({ d: s.date, v: s.litros / s.dur * 60 })), { label: "Litros por hora" })));
     C.push(chartCard("Litros/vaca por teste de ordenha", "L", tchart(ss.filter(s => s.vacas && s.litros).map(s => ({ d: s.date, v: s.litros / s.vacas })), { dec: 1, label: "Litros por vaca" })));
     C.push(chartCard("Tetos com escore ≥3", "% dos quartos · avaliação manual", tchart(qhk(f.id).map(x => ({ d: x[0], v: x[1] })), { color: "var(--cr)", label: "Hiperqueratose" })));
     return C.join("");
   });
+  TCH_LIM = "";
   return farmHead(f, "Indicadores") + farmSwitch(f) + demoNote(f) + kpiGrid(fkpi(f))
-    + `<h2>Alertas</h2>${alertList(f)}<h2>Gráficos</h2><div class="two">${ch}</div><h2>Resumos dos setores</h2>${qsum() + csum() + msum() || '<p class="mu">Sem dados.</p>'}`
+    + `<h2>Alertas</h2>${alertList(f)}<div class="top"><h2>Gráficos</h2><div class="tabs noprint">${KP.map(([k, l]) => `<button class="tb ${kp == k ? "on" : ""}" onclick="V.kp='${k}';render()">${l}</button>`).join("")}</div></div><div class="two">${ch}</div><h2>Resumos dos setores</h2>${qsum() + csum() + msum() || '<p class="mu">Sem dados.</p>'}`
     + `<p class="mu">Valores calculados a partir dos registros desta fazenda. Metas são as definidas por você no cadastro; o app não aplica limites normativos.</p>`;
 }
 
@@ -257,7 +262,7 @@ function sideNav() {
 <button class="si${on("farm")}" onclick="go('farm')"><span class="n">🧩</span>Central da fazenda</button>
 <button class="si${on("kpi")}" onclick="go('kpi')"><span class="n">📊</span>Indicadores</button>
 <div class="sh">Setores</div>${SECT.map((s, i) => `<button class="si${V.v == "sector" && V.s == i ? " on" : ""}" onclick="go('sector',V.f,${i})"><span class="n">${s[0]}</span>${i + 1}. ${s[1]}${ss ? `<span class="dot ${ss[i].st}" title="${E(ss[i].lab)}"></span>` : ""}</button>`).join("")}
-<div class="sh">Geral</div><button class="si${on("visit")}" onclick="go('visit')"><span class="n">📝</span>Visitas</button><button class="si${on("backup")}" onclick="go('backup')"><span class="n">💾</span>Dados e backup</button>
+<div class="sh">Geral</div><button class="si${on("gv")}" onclick="gvStart()"><span class="n">📋</span>Visita guiada</button><button class="si${on("visit")}" onclick="go('visit')"><span class="n">📝</span>Visitas</button><button class="si${on("backup")}" onclick="go('backup')"><span class="n">💾</span>Dados e backup</button>
 <div class="sfoot">${netChip()}<br>Dados neste aparelho · ${MQ_ENV == "teste" ? "versão de testes · " : ""}app ${APP_BUILD}</div>`;
 }
 function sectorStrip() {
@@ -267,7 +272,7 @@ function sectorStrip() {
 /* "＋ Registrar": todos os registros da fazenda atual a um toque (folha na parte de baixo da tela) */
 const REG = [["🥛", "Análise de leite", "goTab(4,'an')"], ["⏱️", "Teste de ordenha", "goTab(5,'cro')"], ["⚙️", "Medição de equipamento", "regEq()"], ["📏", "Auditoria ISO Check", "go('sector',V.f,2);isoNew()"],
   ["🔧", "Leite residual", "go('sector',V.f,3);ttNew('lr')"], ["🐄", "Avaliação de tetos", "goTab(4,'te')"], ["🧼", "Lavagem CIP", "goTab(6,'cy')"], ["💧", "Análise de água", "goTab(6,'wa')"],
-  ["🛠️", "Serviço de manutenção", "goTab(7,'mt')"], ["📝", "Visita", "VF=Object.assign(newVF(),{fid:V.f});VE=null;go('visit')"], ["✅", "Ação do plano", "V.r9v='pa';go('sector',V.f,8)"], ["🏡", "Nova fazenda", "newFarm()"]];
+  ["🛠️", "Serviço de manutenção", "goTab(7,'mt')"], ["📋", "Visita guiada", "gvStart()"], ["📝", "Visita rápida", "VF=Object.assign(newVF(),{fid:V.f});VE=null;go('visit')"], ["✅", "Ação do plano", "V.r9v='pa';go('sector',V.f,8)"], ["🏡", "Nova fazenda", "newFarm()"]];
 function regEq() { const es = L("eq"); if (es.length == 1) goTab(1, "med", V.f, es[0].id); else goTab(1, "med"); }
 function regGo(i) { V.sheet = 0; new Function(REG[i][2])(); }
 function sheet() {
@@ -279,11 +284,12 @@ function bottomNav() {
   const t = V.v == "sector" ? "farm" : V.v, N = [["home", "🏠", "Fazendas"], ["farm", "🧩", "Central"], ["kpi", "📊", "Indicadores"], ["backup", "💾", "Dados"]];
   return N.slice(0, 2).concat([null], N.slice(2)).map(n => n ? `<button class="${t == n[0] ? "on" : ""}" onclick="go('${n[0]}')"><span>${n[1]}</span>${n[2]}</button>` : `<button class="fab" onclick="V.sheet=1;render()" aria-label="Registrar"><span>＋</span>Registrar</button>`).join("");
 }
+function printHead() { const f = F(); return `<div class="printonly"><b>MilkIQ</b> · ${E(f.name)} · ${E(f.producer)} · ${E(f.city)} · emitido em ${new Date().toLocaleString("pt-BR")}${f.demo ? " · DADOS DE DEMONSTRAÇÃO" : ""}</div>`; }
 function render() {
   if (!farms.some(x => x.id == V.f)) V.f = (realFarms()[0] || farms[0]).id;
-  const m = { home, farm, kpi: kpiv, sector, visit, new: newf, backup: bkv, fdel: farmDelView };
+  const m = { home, farm, kpi: kpiv, sector, visit, new: newf, backup: bkv, fdel: farmDelView, gv };
   if (V.v == "backup" && !IDBS.est && typeof storageInfo == "function") storageInfo().then(() => { if (V.v == "backup") $("app").innerHTML = statusBar() + bkv(); });
-  $("app").innerHTML = statusBar() + (V.v == "sector" ? sectorStrip() : "") + (m[V.v] || home)() + sheet();
+  $("app").innerHTML = printHead() + statusBar() + (V.v == "sector" ? sectorStrip() : "") + (m[V.v] || home)() + sheet();
   $("nav").innerHTML = bottomNav();
   const sd = $("side"); if (sd) sd.innerHTML = sideNav();
   if (V.v == "sector" && V.s == 5) { calc(); tickT(); }

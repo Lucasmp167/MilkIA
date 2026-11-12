@@ -1,5 +1,5 @@
 /* ===== Etapa 1: segurança dos dados e estabilidade ===== */
-const DATA_VER=7,APP_BUILD="3.1-2026-11-12",DEMO_IDS=["modelo","critica"];
+const DATA_VER=7,APP_BUILD="3.2-2026-11-12",DEMO_IDS=["modelo","critica"];
 const ARR=["sessions","an","ts","ev","cy","pq","wa","eq","cmp","pl","sv","dx","pc","dg","rf","vs","farms"],MAP=["gl","ob","cr","rp","rm"];
 const LAB={sessions:"Testes de ordenha",an:"Análises de leite",ts:"Avaliações de tetos",ev:"Eventos",cy:"Lavagens CIP",pq:"Produtos químicos",wa:"Análises de água",eq:"Equipamentos",cmp:"Componentes",pl:"Itens de revisão",sv:"Serviços",dx:"Medições",pc:"Peças",dg:"Diagramas",rf:"Referências técnicas",vs:"Visitas",farms:"Fazendas",gl:"Metas de qualidade",ob:"Observações de qualidade",cr:"Referências de limpeza",rp:"Relatório de limpeza",rm:"Relatório de manutenção"};
 const ID=/^[A-Za-z0-9_-]{1,64}$/,clean=s=>String(s==null?"":s).replace(/[<>]/g,"").slice(0,120);
@@ -74,7 +74,7 @@ function saveVisit(){const v=cp(VF);if(!v.fid)v.fid=V.f;if(!farms.some(f=>f.id==
  if(upsert("vs",v)){VF=newVF();VE=null;V.f=v.fid;note("Visita salva e conferida no armazenamento do navegador.",1)}else note(FAIL)}
 /* ===== cadastro de fazendas: ver js/11-fazendas.js ===== */
 /* ===== barra de estado e avisos ===== */
-function statusBar(){let h=envNotice()+updateNotice()+netNotice();const A=(c,t)=>`<div class="alert ${c}" style="border-color:currentColor"><span style="color:var(--tx)">${t}</span></div>`;
+function statusBar(){let h=envNotice()+updateNotice()+netNotice()+(typeof gvBar=="function"?gvBar():"");const A=(c,t)=>`<div class="alert ${c}" style="border-color:currentColor"><span style="color:var(--tx)">${t}</span></div>`;
  if(CORRUPT!==null)h+=A("cr","<b>Os dados salvos neste navegador estão ilegíveis.</b> Para proteger o original, nada será gravado agora.<br><button class=\"btn s\" onclick=\"bkRaw()\">Exportar texto original</button> <button class=\"btn s\" onclick=\"bkFresh()\">Começar do zero (mantém uma cópia)</button>"+(IDB_COPY?"<br><button class=\"btn s\" onclick=\"restoreFromIdb()\">Restaurar a cópia do banco do aparelho"+(IDBS.copyTs?" ("+new Date(IDBS.copyTs).toLocaleString("pt-BR")+")":"")+"</button>":""));
  else if(MIGERR)h+=A("cr","Os dados são de uma versão incompatível: "+E(MIGERR)+". Nada será gravado.");
  else if(!STORE_OK)h+=A("cr","<b>Armazenamento indisponível neste navegador/ambiente.</b> Nada que você registrar será mantido após atualizar a página.");

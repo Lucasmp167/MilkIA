@@ -22,3 +22,4 @@
 - Publicação: a estável é o commit em `deploy/ESTAVEL`. Só mude esse arquivo para um commit que já passou em `npm test` e no GitHub Actions.
 - ISO Check (`js/14-iso.js`): os ensaios (`ISOT`) têm só nome e unidade. A biblioteca é `DB.rf`, com `norma`/`item`/`doc`; `fab` vazio vale para todas as marcas, e `refFor` escolhe a referência mais específica. Dados v4 = coleção `iso`.
 - Ordenha (`js/17-ordenha.js`): substitui `ord()` e reaproveita o cronômetro do `03`. Os turnos ficam guardados como 1/2/3 (`TURNO`). O ranking (`rank2`) não pode voltar a premiar velocidade: a produtividade pesa 5. As metas da rotina ficam em `DB.gl[fid].rot`, definidas pelo usuário. O assistente (`assist`) é baseado em regras e nunca deve ser apresentado como IA.
+- A visita guiada (`js/18-visita.js`) usa `DB.vs` com `gst`/`steps`, sem coleção nova. A importação de laudos (`js/19-importar.js`) envolve `qAn`; datas inválidas, como 32/13, precisam ser recusadas.

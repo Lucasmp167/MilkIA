@@ -100,4 +100,6 @@ aside#side{display:none}
 .sh{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--mu);padding:12px 10px 4px}
 .sfarm{padding:4px 6px 6px}.sfarm select{padding:8px}
 .sfoot{margin-top:auto;padding:12px 8px 0;font-size:11px;color:var(--mu)}
-@media print{nav,aside#side,.strip,.noprint{display:none!important}body{background:#fff;color:#000;display:block}#app{max-width:none;padding:0}.card,.kc,.sec{box-shadow:none}}
+.printonly{display:none}
+@page{size:A4;margin:14mm 12mm}
+@media print{.printonly{display:block;font-size:11px;border-bottom:1px solid #999;padding-bottom:4px;margin-bottom:8px}.card,.kc,.alert,tr,.sec{break-inside:avoid}h2{break-after:avoid}.tabs,.quick,.sheet-bg,.alist .go{display:none!important}.alert{box-shadow:none}nav,aside#side,.strip,.noprint{display:none!important}body{background:#fff;color:#000;display:block}#app{max-width:none;padding:0}.card,.kc,.sec{box-shadow:none}}

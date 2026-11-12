@@ -21,6 +21,9 @@ function appSource(app = APP) {
   return html + files.map(f => "\n" + fs.readFileSync(path.join(dir, f), "utf8")).join("");
 }
 
+/* data relativa a hoje (aaaa-mm-dd) */
+const DDnow = n => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
+
 /* ---------- mini harness ---------- */
 const T = [];
 const test = (name, fn) => T.push({ name, fn });
@@ -105,6 +108,7 @@ const INVENTORY = {
   "Setor 4 – Testes técnicos": ["tt4", "ttTab", "ttForm", "ttSave", "ttDetail", "ttCompare", "ttAddRow", "ttFile", "lrStats", "ttDel"],
   "Setor 9 – Relatórios": ["r9", "visReport", "paView", "paSave", "paSet", "paFromAlert", "secReports", "rset9"],
   "Ordenha v2 – turnos e ordenhadores": ["vTurnos", "vOps", "vDiag", "rank2", "met", "routineFindings", "opSave", "opFill", "opList", "colChart", "mchart", "assist", "assistCard", "producerSummary", "paFromFinding", "paKpi", "qualByTurn", "rotSet"],
+  "Visita guiada e importação": ["gv", "gvStart", "gvSet", "gvFinish", "gvBar", "gvActive", "impCard", "impAnalyze", "impApply", "impFile", "csvRows", "impDate", "printHead"],
   "Offline / PWA": ["idbMirror", "bootOffline", "restoreFromIdb", "askPersist", "swRegister", "swUpdate", "offlineCard", "installCard", "netNotice"],
   "Etapa 1 – Central": ["sstat", "falerts", "fkpi", "kpiGrid", "tchart", "farmCard", "ficha", "farmDelView", "farmDelete", "farmCounts", "openEdit", "sideNav", "sectorStrip", "bottomNav", "render", "withFarm", "goTab"],
   "Dados/backup": ["ldS", "svS", "migrate", "initData", "drSnap", "drRestore", "buildFile", "bkExport", "bkCopy", "bkAnalyze", "bkApply", "bkUndo", "bkv", "hashHex"],
@@ -361,7 +365,7 @@ test("layout: menu lateral no computador; barra inferior e faixa de setores no c
   try {
     await d.page.evaluate(() => go("sector", "modelo", 4));
     eq([await vis(d.page, "#side"), await vis(d.page, "#nav"), await vis(d.page, ".strip")], [true, false, false], "computador (menu lateral, barra, faixa)");
-    eq(await d.page.$$eval("#side .si", x => x.length), 14, "itens do menu lateral (3 + 9 setores + 2)");
+    eq(await d.page.$$eval("#side .si", x => x.length), 15, "itens do menu lateral (3 + 9 setores + 3)");
     await d.page.click("#side >> text=6. Otimização da ordenha");
     eq(await d.page.evaluate(() => [V.v, V.s]), ["sector", 5], "navegar pelo menu lateral");
     noErrors(d.errors);
@@ -678,7 +682,7 @@ test("navegação: ＋ Registrar abre todos os registros da fazenda a um toque (
       await mkEq(p, fid, { fab: "GEA", mod: "Único", ser: "1" });
       await p.evaluate(() => go("home"));
       await p.click(viewport.width < 900 ? "nav .fab" : "#side >> text=＋ Registrar");
-      eq(await p.$$eval(".reg button", b => b.length), 12, "atalhos na folha");
+      eq(await p.$$eval(".reg button", b => b.length), 13, "atalhos na folha");
       await p.click(".reg >> text=Medição de equipamento");
       eq(await p.evaluate(() => [V.v, V.s, V.e2t, !!V.e2, !!document.querySelector(".sheet")]), ["sector", 1, "med", true, false], "um toque até a medição do único equipamento");
       await p.evaluate(() => { V.sheet = 1; render(); });
@@ -839,6 +843,70 @@ test("assistente técnico: fatos, hipóteses e recomendações na Central e resu
     tx = await txt(p);
     ok(tx.includes("Resumo para o produtor") && tx.includes("Precisa de atenção") && tx.includes("Análise técnica (fatos, hipóteses e recomendações)"), "relatório da visita");
     eq(await p.evaluate(fid => { const q = qualByTurn(farms.find(f => f.id == fid)); return q && q[1] && q[1].n; }, fid), 6, "qualidade por turno a partir das análises com turno");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
+test("visita guiada: etapas, registro a partir da etapa com barra de retorno, conclusão e relatório", async () => {
+  const s = await open(), p = s.page;
+  try {
+    const fid = await mkFarm(p, { name: "Fazenda GV", goal: "300" });
+    await p.evaluate(() => { go("farm", V.f); });
+    await p.click("text=▶ Iniciar visita");
+    eq(await p.evaluate(() => [V.v, DB.vs.length, DB.vs[0].gst]), ["gv", 1, "andamento"], "visita iniciada");
+    await p.evaluate(() => gvField("obj", "CCS alta"));
+    await p.click("text=+ Análise");
+    eq(await p.evaluate(() => [V.v, V.s, V.q]), ["sector", 4, "an"], "etapa abre o formulário do setor");
+    ok((await txt(p)).includes("Visita em andamento"), "barra de retorno à visita");
+    await p.evaluate(() => { AF = Object.assign(newAF(), { ccs: "420" }); asave(); });
+    await p.click("text=voltar à visita");
+    ok((await txt(p)).includes("1 registro(s) nesta etapa"), "registro do dia contado na etapa");
+    await p.evaluate(() => gvSet("q", "obs", "CCS acima da meta no tanque 1"));
+    await p.click("text=Concluir etapa e avançar →");
+    eq(await p.evaluate(() => [V.gvs, DB.vs[0].steps.q.st]), [1, "Concluída"], "avançar conclui a etapa");
+    await p.evaluate(() => { V.gvs = GV.length; render(); gvFinish(); });
+    ok((await txt(p)).includes("etapa(s) pendente(s)"), "aviso de etapas pendentes antes de concluir");
+    await p.evaluate(() => gvFinish());
+    const r = await p.evaluate(() => [DB.vs[0].gst, V.v, V.s, V.r9vis == DB.vs[0].id, gvActive()]);
+    eq(r, ["concluída", "sector", 8, true, undefined], "visita concluída abre o relatório");
+    const t = await txt(p);
+    ok(t.includes("Objetivo: CCS alta") && t.includes("Qualidade do leite: Concluída — CCS acima da meta no tanque 1") && t.includes("420"), "relatório com etapas e registros: " + t.slice(0, 300));
+    ok(!(await txt(p)).includes("Visita em andamento"), "barra some após concluir");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
+test("importação de laudo: CSV com vírgula decimal, células/mL, datas variadas, duplicadas e inválidas", async () => {
+  const s = await open(), p = s.page;
+  try {
+    const fid = await mkFarm(p, { name: "Fazenda Imp" });
+    await addAn(p, fid, { date: "2026-10-01", tk: "T1", ccs: "250" });
+    const csv = "Data da coleta;Tanque;CCS (cél/mL);CBT (UFC/mL);Gordura (%);Proteína (%)\n01/10/2026;T1;250;;;\n15/10/2026;T1;310000;45000;3,85;3,20\n2026-10-29;T1;290;40;3,9;3,25\n32/13/2026;T1;300;;;\n05/11/26;T2;1.250.000;;;";
+    await p.evaluate(csv => { go("sector", V.f, 4); V.q = "an"; V.imp = 1; IMP.txt = csv; IMP.lab = "Lab X"; impAnalyze(); render(); }, csv);
+    const R = await p.evaluate(() => IMP.rep.rows.map(r => [r.line, r.date, r.ccs, r.cbt, r.gor, r.dup, r.bad.join("|")]));
+    eq(R, [[2, "2026-10-01", 250, null, null, true, ""], [3, "2026-10-15", 310, 45, 3.85, false, ""], [4, "2026-10-29", 290, 40, 3.9, false, ""], [5, null, 300, null, null, false, "data inválida"], [6, "2026-11-05", 1250, null, null, false, ""]], "prévia");
+    ok((await txt(p)).includes("3 análise(s) nova(s) para importar"), "resumo da prévia");
+    await p.evaluate(() => impApply());
+    eq(await p.evaluate(() => DB.an.map(a => [a.date, a.tk, a.ccs, a.lab || ""]).sort()), [["2026-10-01", "T1", 250, ""], ["2026-10-15", "T1", 310, "Lab X"], ["2026-10-29", "T1", 290, "Lab X"], ["2026-11-05", "T2", 1250, "Lab X"]], "análises gravadas");
+    await p.evaluate(() => { V.imp = 1; IMP.txt = "Tanque;Valor\nT1;3"; impAnalyze(); });
+    ok((await p.evaluate(() => IMP.rep.err || "")).includes("Coluna de data"), "arquivo sem data recusado");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
+test("indicadores: filtro de período nos gráficos e cabeçalho de impressão", async () => {
+  const s = await open(), p = s.page;
+  try {
+    const fid = await mkFarm(p, { name: "Fazenda Per" });
+    await addAn(p, fid, { date: "2020-01-10", ccs: "999" }); await addAn(p, fid, { date: DDnow(-10), ccs: "200" });
+    await p.evaluate(fid => { V.kp = "90"; go("kpi", fid); }, fid);
+    let ch = await p.$eval("svg.chart", x => x.textContent);
+    ok(!ch.includes("999") && ch.includes("200"), "filtro de 3 meses: " + ch);
+    await p.evaluate(() => { V.kp = ""; render(); });
+    ch = await p.$eval("svg.chart", x => x.textContent);
+    ok(ch.includes("999"), "sem filtro: todo o período");
+    eq(await p.$eval(".printonly", x => getComputedStyle(x).display), "none", "cabeçalho de impressão oculto na tela");
+    ok((await p.$eval(".printonly", x => x.textContent)).includes("Fazenda Per"), "cabeçalho de impressão");
     noErrors(s.errors);
   } finally { await s.close(); }
 });

@@ -68,6 +68,8 @@ js/14-iso.js      Setor 3: ISO Check e biblioteca de referências
 js/15-testes.js   Setor 4: leite residual, testes de campo, relatórios externos
 js/16-relatorios.js Setor 9: relatório da visita e plano de ação
 js/17-ordenha.js  Setor 6 v2: turnos, ordenhadores, ranking, diagnóstico, assistente técnico
+js/18-visita.js   visita guiada em etapas
+js/19-importar.js importação de laudos (CSV/planilha copiada)
 legacy/           cópia original congelada (não editar) + SHA256SUMS
 tests/run.js      testes automatizados
 *.json            backup de 11/11 (usado como teste)
@@ -96,7 +98,7 @@ Cada fazenda tem sua Central, com indicadores, alertas e os 9 setores. O status 
 | 8 | Manutenção preventiva | **Funcional**: equipamentos, revisões, serviços, peças, diagramas, diagnóstico, relatório |
 | 9 | Documentos e relatórios | **Funcional**: relatório consolidado da visita (período ou visita, indicadores, alertas, registros de todos os setores, plano de ação, considerações, assinaturas), plano de ação com responsável/prazo/situação (criado a partir dos alertas; atrasos viram alerta), atalhos para os relatórios de cada setor |
 
-Outras telas: Fazendas, Indicadores (KPIs e gráficos reais), Visitas, Dados e backup. No computador, o menu fica na lateral; no celular, ficam a barra inferior e a faixa de setores.
+Outras telas: **Visita guiada** (qualidade → rotina → equipamento → ISO → tetos/residual → CIP/água → manutenção → plano, com relatório no fim), **＋ Registrar** (12 registros a um toque), **importação de laudos** (CSV ou células copiadas da planilha, com prévia), Fazendas, Indicadores (com filtro de período) (KPIs e gráficos reais), Visitas, Dados e backup. No computador, o menu fica na lateral; no celular, ficam a barra inferior e a faixa de setores.
 
 ## Dados
 
