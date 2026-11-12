@@ -14,6 +14,13 @@ const FIXTURE = path.join(ROOT, "milkiq-backup-20261111-2235.json");
 const OUT = path.join(__dirname, "out");
 const filter = process.argv[2] || "";
 
+/* Código-fonte do app: o HTML + todos os arquivos CSS/JS locais que ele carrega. */
+function appSource(app = APP) {
+  const html = fs.readFileSync(path.join(ROOT, app), "utf8"), dir = path.dirname(path.join(ROOT, app));
+  const files = [...html.matchAll(/<(?:script|link)[^>]+(?:src|href)="(?!https?:)([^"]+)"/g)].map(m => m[1]);
+  return html + files.map(f => "\n" + fs.readFileSync(path.join(dir, f), "utf8")).join("");
+}
+
 /* ---------- mini harness ---------- */
 const T = [];
 const test = (name, fn) => T.push({ name, fn });
@@ -41,7 +48,7 @@ async function open(opts = {}) {
   page.on("pageerror", e => errors.push("pageerror: " + e.message));
   page.on("console", m => { if (m.type() === "error") errors.push("console: " + m.text()); });
   page.on("dialog", d => d.dismiss());
-  await page.goto(`${base}/${APP}`);
+  await page.goto(`${base}/${opts.app || APP}`);
   await page.waitForFunction(() => typeof render == "function" && document.querySelector("#app").children.length > 0);
   return { ctx, page, errors, close: () => ctx.close() };
 }
@@ -95,7 +102,7 @@ const INVENTORY = {
   "Dados/backup": ["ldS", "svS", "migrate", "initData", "drSnap", "drRestore", "buildFile", "bkExport", "bkCopy", "bkAnalyze", "bkApply", "bkUndo", "bkv", "hashHex"],
 };
 test("integridade: inventário de funcionalidades presente no código", () => {
-  const src = fs.readFileSync(path.join(ROOT, APP), "utf8");
+  const src = appSource();
   const miss = [];
   for (const [area, fns] of Object.entries(INVENTORY)) for (const f of fns)
     if (!new RegExp(`function ${f}\\(`).test(src)) miss.push(`${area}: ${f}`);
@@ -103,9 +110,19 @@ test("integridade: inventário de funcionalidades presente no código", () => {
 });
 
 test("integridade: app autocontido (sem scripts ou estilos externos)", () => {
-  const src = fs.readFileSync(path.join(ROOT, APP), "utf8");
+  const src = appSource();
   const ext = src.match(/<(script|link)[^>]+(src|href)=["']https?:[^"']+/gi) || [];
   ok(!ext.length, "recursos externos: " + ext.join(", "));
+});
+
+test("integridade: arquivo único gerado (tools/bundle.js) abre todas as telas sem erro", async () => {
+  if (APP !== "index.html") return; // só para o app atual
+  const out = path.join(OUT, "milkiq-bundle.html");
+  fs.writeFileSync(out, require("../tools/bundle.js").bundle(path.join(ROOT, "index.html")));
+  const html = fs.readFileSync(out, "utf8");
+  ok(!/<script src=|<link rel="stylesheet"/.test(html), "o arquivo único ainda referencia arquivos externos");
+  const s = await open({ app: path.relative(ROOT, out) });
+  try { await visitAll(s.page); noErrors(s.errors); } finally { await s.close(); }
 });
 
 /* ===================== 2. Telas e console ===================== */

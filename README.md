@@ -1,6 +1,6 @@
 # MilkIQ · Leite IA
 
-App web mobile-first para gestão técnica de fazendas leiteiras. É um **arquivo HTML único** (`index.html`): HTML, CSS e JavaScript puros, sem build e sem dependências externas.
+App web para gestão técnica de fazendas leiteiras, feito em HTML, CSS e JavaScript puros, sem dependências externas. Para abrir, basta `index.html`. `npm run build` gera `dist/milkiq.html`, uma versão em arquivo único para compartilhar.
 
 ## Como rodar
 
@@ -28,7 +28,11 @@ Para testar outra cópia do app: `MILKIQ_APP=legacy/milkiq-original-etapa1-2026-
 ## Estrutura
 
 ```
-index.html        app atual
+index.html        página principal (carrega css/ e js/ na ordem)
+css/app.css       estilos
+js/01-base.js     setores, telas principais, navegação
+js/02-…09-*.js    armazenamento, setores 6/5/7/8, dados e fazendas, backup, início
+tools/bundle.js   gera o arquivo único dist/milkiq.html
 legacy/           cópia original congelada (não editar) + SHA256SUMS
 tests/run.js      testes automatizados
 *.json            backup de 11/11 (usado como teste)
