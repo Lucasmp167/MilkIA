@@ -135,6 +135,13 @@ function isoTable(rows, withWho) {
   if (!rows.length) return '<p class="mu">Nenhum ensaio.</p>';
   return `<div class="ov"><table><tr>${withWho ? "<th>Pulsador</th>" : ""}<th>Ensaio</th><th>Valor</th><th>Referência</th><th>Situação</th></tr>${rows.map(x => `<tr>${withWho ? `<td>${E(x.who.replace("pulsador ", ""))}</td>` : ""}<td>${x.t[1]}</td><td>${fm(x.v, x.t[3])} ${x.t[2]}</td><td>${x.r ? `${E(rng(x.r))}<br><span class="mu">${E([x.r.norma, x.r.item].filter(Boolean).join(" · "))}${x.r.norma || x.r.item ? " · " : ""}${E(x.r.fonte)}</span>` : '<span class="mu">sem referência verificada</span>'}</td><td class="${x.st == "Fora" ? (x.g == "Alta" ? "cr" : "wa") : x.st == "Conforme" ? "ok" : "na"}">${x.st}${x.g ? " (" + x.g + ")" : ""}</td></tr>`).join("")}</table></div>`;
 }
+/* Pulsação em matriz: uma linha por pulsador, uma coluna por ensaio; a cor mostra a situação. */
+function isoPulTable(rows) {
+  const ks = ["ptax", "prel", "pa", "pb", "pc", "pd", "pdif"].filter(k => rows.some(r => r.k == k)), who = [...new Set(rows.map(r => r.who))];
+  const cell = r => !r ? "<td>—</td>" : `<td class="${r.st == "Fora" ? (r.g == "Alta" ? "cr" : "wa") : r.st == "Conforme" ? "ok" : ""}" title="${E(r.t[1] + ": " + r.st + (r.r ? " · ref. " + rng(r.r) + " · " + r.r.fonte : ""))}">${fm(r.v, r.t[3])}${r.st == "Fora" ? " ⚠" : r.st == "Conforme" ? " ✔" : ""}</td>`;
+  const refs = ks.map(k => { const r = rows.find(x => x.k == k && x.r); return r ? `${IT[k][1]}: ${rng(r.r)} (${[r.r.norma, r.r.fonte].filter(Boolean).join(" · ")})` : null; }).filter(Boolean);
+  return `<div class="ov"><table><tr><th>Pulsador</th>${ks.map(k => `<th>${{ ptax: "Taxa", prel: "Relação", pa: "a", pb: "b", pc: "c", pd: "d", pdif: "Dif. lados" }[k]}<br><span class="mu">${IT[k][2]}</span></th>`).join("")}</tr>${who.map(w => `<tr><td>${E(w.replace("pulsador ", ""))}</td>${ks.map(k => cell(rows.find(r => r.who == w && r.k == k))).join("")}</tr>`).join("")}</table></div><p class="mu">✔ conforme · ⚠ fora da referência · sem símbolo = sem referência verificada.${refs.length ? " Referências: " + refs.map(E).join("; ") + "." : ""}</p>`;
+}
 function isoDetail(f, a) {
   const e = L("eq").find(x => x.id == a.eid) || { fab: "?", mod: "(equipamento excluído)", id: a.eid }, x = evalIso(a, e);
   const prev = isoOf(a.eid).filter(y => y.date < a.date || (y.date == a.date && y.id < a.id)).pop(), px = prev ? evalIso(prev, e) : null;
@@ -145,7 +152,7 @@ function isoDetail(f, a) {
 <p><b>${E(f.name)}</b> · ${E(f.producer)} · ${E(f.city)}</p><p>${E(eqt(e))} · ${E(e.tipo || "")} ${e.nc ? "· " + E(e.nc) + " conjuntos" : ""}</p><p class="mu">Auditoria ${E(a.tipo)} em ${fmtD(a.date)}${a.tec ? " · técnico: " + E(a.tec) : ""}${a.cond ? " · " + E(a.cond) : ""}</p>
 <p>${badge({ st: x.st, lab: x.lab })} <span class="mu">${x.rows.length} ensaio(s) · ${x.cf} conforme · ${x.nf} fora da referência · ${x.nn} sem referência verificada</span></p>
 ${["s", "d"].map(g => { const r = x.rows.filter(y => y.t[4] == g); return r.length ? `<h2>${ISOG[g]}</h2>${isoTable(r)}` : ""; }).join("")}
-${x.rows.some(y => y.t[4] == "p") ? `<h2>${ISOG.p}</h2>${isoTable(x.rows.filter(y => y.t[4] == "p"), 1)}` : ""}
+${x.rows.some(y => y.t[4] == "p") ? `<h2>${ISOG.p}</h2>${isoPulTable(x.rows.filter(y => y.t[4] == "p"))}` : ""}
 <h2>Problemas, causas possíveis e ações</h2>${probList(x.probs)}
 ${cmp}
 <h2>Referências utilizadas</h2>${used.length ? `<ul>${used.map(r => `<li>${E(parName(r.par))}: ${E(rng(r))} · ${E([r.norma, r.item, r.doc].filter(Boolean).join(" · "))} · ${r.fab ? E(r.fab) + " " + E(r.mod || "") : "todas as marcas"} · fonte: ${E(r.fonte)} · verificada</li>`).join("")}</ul>` : '<p class="mu">Nenhuma referência verificada aplicada: todos os ensaios aparecem como “Não avaliado”.</p>'}
