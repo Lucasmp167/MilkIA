@@ -109,6 +109,7 @@ const INVENTORY = {
   "Setor 9 – Relatórios": ["r9", "visReport", "paView", "paSave", "paSet", "paFromAlert", "secReports", "rset9"],
   "Ordenha v2 – turnos e ordenhadores": ["vTurnos", "vOps", "vDiag", "rank2", "met", "routineFindings", "opSave", "opFill", "opList", "colChart", "mchart", "assist", "assistCard", "producerSummary", "paFromFinding", "paKpi", "qualByTurn", "rotSet"],
   "Visita guiada e importação": ["gv", "gvStart", "gvSet", "gvFinish", "gvBar", "gvActive", "impCard", "impAnalyze", "impApply", "impFile", "csvRows", "impDate", "printHead"],
+  "Cronômetro por fase, abas e relatório da fazenda": ["phToggle", "phReset", "phSaveCow", "phPanel", "phMeans", "gbar", "sectorStrip", "frel"],
   "Offline / PWA": ["idbMirror", "bootOffline", "restoreFromIdb", "askPersist", "swRegister", "swUpdate", "offlineCard", "installCard", "netNotice"],
   "Etapa 1 – Central": ["sstat", "falerts", "fkpi", "kpiGrid", "tchart", "farmCard", "ficha", "farmDelView", "farmDelete", "farmCounts", "openEdit", "sideNav", "sectorStrip", "bottomNav", "render", "withFarm", "goTab"],
   "Dados/backup": ["ldS", "svS", "migrate", "initData", "drSnap", "drRestore", "buildFile", "bkExport", "bkCopy", "bkAnalyze", "bkApply", "bkUndo", "bkv", "hashHex"],
@@ -364,8 +365,8 @@ test("layout: menu lateral no computador; barra inferior e faixa de setores no c
   const d = await open({ viewport: { width: 1366, height: 900 } });
   try {
     await d.page.evaluate(() => go("sector", "modelo", 4));
-    eq([await vis(d.page, "#side"), await vis(d.page, "#nav"), await vis(d.page, ".strip")], [true, false, false], "computador (menu lateral, barra, faixa)");
-    eq(await d.page.$$eval("#side .si", x => x.length), 15, "itens do menu lateral (3 + 9 setores + 3)");
+    eq([await vis(d.page, "#side"), await vis(d.page, "#nav"), await vis(d.page, ".strip")], [true, false, true], "computador (menu lateral, barra, abas da fazenda)");
+    eq(await d.page.$$eval("#side .si", x => x.length), 16, "itens do menu lateral (4 + 9 setores + 3)");
     await d.page.click("#side >> text=6. Otimização da ordenha");
     eq(await d.page.evaluate(() => [V.v, V.s]), ["sector", 5], "navegar pelo menu lateral");
     noErrors(d.errors);
@@ -374,7 +375,7 @@ test("layout: menu lateral no computador; barra inferior e faixa de setores no c
   try {
     await m.page.evaluate(() => go("sector", "modelo", 4));
     eq([await vis(m.page, "#side"), await vis(m.page, "#nav"), await vis(m.page, ".strip")], [false, true, true], "celular (menu lateral, barra, faixa)");
-    await m.page.click(".strip button:nth-child(8)");
+    await m.page.click(".strip >> text=Manutenção");
     eq(await m.page.evaluate(() => V.s), 7, "navegar pela faixa de setores");
     noErrors(m.errors);
   } finally { await m.close(); }
@@ -907,6 +908,56 @@ test("indicadores: filtro de período nos gráficos e cabeçalho de impressão",
     ok(ch.includes("999"), "sem filtro: todo o período");
     eq(await p.$eval(".printonly", x => getComputedStyle(x).display), "none", "cabeçalho de impressão oculto na tela");
     ok((await p.$eval(".printonly", x => x.textContent)).includes("Fazenda Per"), "cabeçalho de impressão");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
+test("cronômetro por fase: fases independentes (simultâneas), salvar vaca, análises e rascunho", async () => {
+  const s = await open(), p = s.page;
+  try {
+    const fid = await mkFarm(p, { name: "Fazenda Fases" });
+    await p.evaluate(fid => { V.o = "cro"; go("sector", fid, 5); }, fid);
+    ok((await txt(p)).includes("Cronômetro por fase") && (await p.$$(".ph")).length == 10, "painel com 10 fases");
+    await p.evaluate(() => { PT.n = "77"; phToggle("pa"); phToggle("pre"); });
+    eq(await p.evaluate(() => FASES.filter(([k]) => PT.t[k] && PT.t[k].run).map(x => x[0])), ["pre", "pa"], "duas fases correndo ao mesmo tempo");
+    await p.waitForTimeout(400);
+    await p.evaluate(() => { phToggle("pre"); PT.t.pre.acc = 20; PT.t.pa.acc = 0; PT.t.pa.t0 = Date.now() - 75000; PT.t.fl = { acc: 300, run: false }; PT.t.so = { acc: 40, run: false }; PT.t.sec = { acc: 9, run: false }; PT.t.jatos = { acc: 8, run: false }; PT.t.ret = { acc: 5, run: false }; phReset("ret"); });
+    // rascunho guarda os tempos se o app fechar no meio da vaca
+    await p.evaluate(() => { drSnap(); drFlush(); });
+    await p.reload(); await p.waitForFunction(() => window.MQ_READY === true);
+    eq(await p.evaluate(() => [PT.n, Math.round(PT.t.pre.acc), PT.t.ret]), ["77", 20, undefined], "rascunho restaurado");
+    await p.evaluate(() => { V.o = "cro"; go("sector", V.f, 5); PT.t.pa = { acc: 75, run: false }; phSaveCow(); dset("milker", "Ana"); dset("litros", "500"); dset("vacas", "20"); dset("dur", "40"); ssave(); });
+    const r = await p.evaluate(() => { const c = SS()[0].cows[0], x = cd(c); return [c.ph.pa, c.ph.pre, x.pa, x.ct, x.fl, x.so, x.or, x.hyg, x.full, Math.round(phMeans(SS()).pa)]; });
+    eq(r, [75, 20, 75, 20, 300, 40, 340, true, false, 75], "vaca por fase entra nas análises");
+    ok(await p.evaluate(fid => routineFindings(SS(), farms.find(f => f.id == fid)).some(x => x.fato.includes("sem pós-dipping") || x.fato.includes("sem")), fid) !== undefined, "diagnóstico lê vacas por fase sem erro");
+    await p.evaluate(() => { V.o = "tur"; render(); });
+    { const tt = await txt(p); ok(tt.includes("Tempo médio por fase da rotina × turno"), "gráfico de fases por turno: " + tt.slice(0, 500)); }
+    await p.evaluate(() => { V.o = "cro"; V.cm = "marcos"; render(); });
+    ok((await txt(p)).includes("Cronômetro da vaca") && (await txt(p)).includes("Primeiros jatos"), "modo antigo com marcos continua disponível");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
+test("abas da fazenda e relatório da fazenda: tudo numa página, com comparação entre períodos", async () => {
+  const s = await open(), p = s.page;
+  try {
+    const fid = await mkFarm(p, { name: "Fazenda Rel", goal: "300" });
+    await addAn(p, fid, { date: DDnow(-40), ccs: "400" }); await addAn(p, fid, { date: DDnow(-5), ccs: "250" });
+    await mkSess(p, fid, { date: DDnow(-3), turn: 1, milker: "Ana", litros: "500", vacas: "20", dur: "40" }, [fullCow(80, 20)]);
+    await p.evaluate(fid => go("farm", fid), fid);
+    const tabs = await p.$$eval(".strip button", b => b.map(x => x.textContent.trim()));
+    eq(tabs.length, 12, "abas da fazenda");
+    ok(tabs[0].includes("Resumo") && tabs.some(t => t.includes("Relatório")) && tabs.some(t => t.includes("Equipamentos")), "abas: " + tabs);
+    await p.click(".strip >> text=Relatório");
+    eq(await p.evaluate(() => V.v), "frel", "aba Relatório abre o relatório da fazenda");
+    const t = await txt(p);
+    ok(t.includes("Relatório da fazenda — Fazenda Rel") && t.includes("Resumo para o produtor") && t.includes("Situação dos setores"), "cabeçalho do relatório");
+    ok(/CCS[^\n]*\(meta 300\)\s*400 mil\/mL\s*250 mil\/mL\s*-150 \(-38%\)/.test(t), "comparação CCS anterior × atual: " + t.slice(t.indexOf("Qualidade"), t.indexOf("Qualidade") + 300));
+    ok(t.includes("Ordenha e rotina") && t.includes("Tempo por fase da rotina — anterior × atual"), "ordenha e fases no relatório");
+    ok(!/DEMO|fictíc/.test(t), "relatório real sem texto de demonstração");
+    ok((await p.$$(".report svg.chart")).length >= 2, "gráficos no relatório (CCS e fases)");
+    await p.evaluate(() => go("frel", "critica"));
+    ok((await txt(p)).includes("DADOS DE DEMONSTRAÇÃO"), "relatório demo identificado");
     noErrors(s.errors);
   } finally { await s.close(); }
 });

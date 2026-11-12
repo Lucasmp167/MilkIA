@@ -70,6 +70,8 @@ js/16-relatorios.js Setor 9: relatório da visita e plano de ação
 js/17-ordenha.js  Setor 6 v2: turnos, ordenhadores, ranking, diagnóstico, assistente técnico
 js/18-visita.js   visita guiada em etapas
 js/19-importar.js importação de laudos (CSV/planilha copiada)
+js/20-fases.js    cronômetro por fase da rotina e gráficos agrupados
+js/21-relfazenda.js relatório da fazenda (uma página, período atual × anterior)
 legacy/           cópia original congelada (não editar) + SHA256SUMS
 tests/run.js      testes automatizados
 *.json            backup de 11/11 (usado como teste)
@@ -97,6 +99,8 @@ Cada fazenda tem sua Central, com indicadores, alertas e os 9 setores. O status 
 | 7 | Limpeza CIP e químicos | **Funcional**: lavagens, produtos/estoque, água, gráficos, antes/depois, relatório |
 | 8 | Manutenção preventiva | **Funcional**: equipamentos, revisões, serviços, peças, diagramas, diagnóstico, relatório |
 | 9 | Documentos e relatórios | **Funcional**: relatório consolidado da visita (período ou visita, indicadores, alertas, registros de todos os setores, plano de ação, considerações, assinaturas), plano de ação com responsável/prazo/situação (criado a partir dos alertas; atrasos viram alerta), atalhos para os relatórios de cada setor |
+
+Ao entrar numa fazenda, uma **barra de abas fixa** mostra todas as áreas na ordem da visita: Resumo, Qualidade, Ordenha, Equipamentos, ISO Check, Testes, Limpeza, Manutenção, Gráficos, Plano e visitas, Relatório e Cadastro. O **Relatório da fazenda** reúne tudo numa página, comparando o período atual com o anterior, com gráficos. A ordenha tem **um cronômetro para cada fase da rotina**, e o modo com marcos continua disponível.
 
 Outras telas: **Visita guiada** (qualidade → rotina → equipamento → ISO → tetos/residual → CIP/água → manutenção → plano, com relatório no fim), **＋ Registrar** (12 registros a um toque), **importação de laudos** (CSV ou células copiadas da planilha, com prévia), Fazendas, Indicadores (com filtro de período) (KPIs e gráficos reais), Visitas, Dados e backup. No computador, o menu fica na lateral; no celular, ficam a barra inferior e a faixa de setores.
 

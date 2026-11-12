@@ -260,14 +260,18 @@ function sideNav() {
 <button class="si${on("home")}" onclick="go('home')"><span class="n">🏠</span>Fazendas</button>
 <div class="sh">Fazenda</div><div class="sfarm"><select aria-label="Fazenda atual" onchange="go(V.v=='kpi'?'kpi':'farm',this.value)">${realFarms().length ? `<optgroup label="Minhas fazendas">${opt(realFarms())}</optgroup>` : ""}<optgroup label="Demonstração">${opt(demoFarms())}</optgroup></select></div>
 <button class="si${on("farm")}" onclick="go('farm')"><span class="n">🧩</span>Central da fazenda</button>
-<button class="si${on("kpi")}" onclick="go('kpi')"><span class="n">📊</span>Indicadores</button>
+<button class="si${on("kpi")}" onclick="go('kpi')"><span class="n">📊</span>Indicadores</button><button class="si${on("frel")}" onclick="go('frel')"><span class="n">🧾</span>Relatório da fazenda</button>
 <div class="sh">Setores</div>${SECT.map((s, i) => `<button class="si${V.v == "sector" && V.s == i ? " on" : ""}" onclick="go('sector',V.f,${i})"><span class="n">${s[0]}</span>${i + 1}. ${s[1]}${ss ? `<span class="dot ${ss[i].st}" title="${E(ss[i].lab)}"></span>` : ""}</button>`).join("")}
 <div class="sh">Geral</div><button class="si${on("gv")}" onclick="gvStart()"><span class="n">📋</span>Visita guiada</button><button class="si${on("visit")}" onclick="go('visit')"><span class="n">📝</span>Visitas</button><button class="si${on("backup")}" onclick="go('backup')"><span class="n">💾</span>Dados e backup</button>
 <div class="sfoot">${netChip()}<br>Dados neste aparelho · ${MQ_ENV == "teste" ? "versão de testes · " : ""}app ${APP_BUILD}</div>`;
 }
+/* Abas da fazenda: ao entrar numa fazenda, todas as áreas ficam numa barra fixa, na ordem de uma visita
+ * (padrão de "abas do registro" de apps de campo; no computador o menu lateral mostra o mesmo). */
+const FTABS = [["farm", null, "🧩", "Resumo"], ["sector", 4, "🥛", "Qualidade"], ["sector", 5, "⏱️", "Ordenha"], ["sector", 1, "⚙️", "Equipamentos"], ["sector", 2, "📏", "ISO Check"], ["sector", 3, "🔧", "Testes"],
+  ["sector", 6, "🧼", "Limpeza"], ["sector", 7, "🛠️", "Manutenção"], ["kpi", null, "📊", "Gráficos"], ["sector", 8, "✅", "Plano e visitas"], ["frel", null, "🧾", "Relatório"], ["sector", 0, "🏡", "Cadastro"]];
 function sectorStrip() {
-  const f = F(), ss = allStat(f);
-  return `<div class="strip noprint" aria-label="Setores">${SECT.map((s, i) => `<button class="${V.s == i ? "on" : ""}" onclick="go('sector',V.f,${i})"><span class="dot ${ss[i].st}"></span>${s[0]} ${i + 1}</button>`).join("")}</div>`;
+  const f = F(), ss = allStat(f), on = t => V.v == t[0] && (t[1] == null || V.s == t[1]);
+  return `<div class="strip noprint" role="tablist" aria-label="Áreas da fazenda ${E(f.name)}">${FTABS.map(t => `<button role="tab" class="${on(t) ? "on" : ""}" aria-selected="${on(t)}" onclick="${t[0] == "sector" ? `go('sector',V.f,${t[1]})` : `go('${t[0]}',V.f)`}">${t[1] != null ? `<span class="dot ${ss[t[1]].st}"></span>` : ""}${t[2]} ${t[3]}</button>`).join("")}</div>`;
 }
 /* "＋ Registrar": todos os registros da fazenda atual a um toque (folha na parte de baixo da tela) */
 const REG = [["🥛", "Análise de leite", "goTab(4,'an')"], ["⏱️", "Teste de ordenha", "goTab(5,'cro')"], ["⚙️", "Medição de equipamento", "regEq()"], ["📏", "Auditoria ISO Check", "go('sector',V.f,2);isoNew()"],
@@ -287,9 +291,9 @@ function bottomNav() {
 function printHead() { const f = F(); return `<div class="printonly"><b>MilkIQ</b> · ${E(f.name)} · ${E(f.producer)} · ${E(f.city)} · emitido em ${new Date().toLocaleString("pt-BR")}${f.demo ? " · DADOS DE DEMONSTRAÇÃO" : ""}</div>`; }
 function render() {
   if (!farms.some(x => x.id == V.f)) V.f = (realFarms()[0] || farms[0]).id;
-  const m = { home, farm, kpi: kpiv, sector, visit, new: newf, backup: bkv, fdel: farmDelView, gv };
+  const m = { home, farm, kpi: kpiv, sector, visit, new: newf, backup: bkv, fdel: farmDelView, gv, frel };
   if (V.v == "backup" && !IDBS.est && typeof storageInfo == "function") storageInfo().then(() => { if (V.v == "backup") $("app").innerHTML = statusBar() + bkv(); });
-  $("app").innerHTML = printHead() + statusBar() + (V.v == "sector" ? sectorStrip() : "") + (m[V.v] || home)() + sheet();
+  $("app").innerHTML = printHead() + statusBar() + (["sector", "farm", "kpi", "frel", "gv"].includes(V.v) ? sectorStrip() : "") + (m[V.v] || home)() + sheet();
   $("nav").innerHTML = bottomNav();
   const sd = $("side"); if (sd) sd.innerHTML = sideNav();
   if (V.v == "sector" && V.s == 5) { calc(); tickT(); }
