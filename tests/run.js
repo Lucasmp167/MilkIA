@@ -615,7 +615,7 @@ test("iso: auditoria (estáticos, pulsadores, dinâmicos) avaliada só por refer
     ok(x.probs[0].startsWith("Alta|Vácuo de trabalho") && x.probs.some(q => q.includes("pulsador A") && q.includes("Ref rel")), "problemas: " + x.probs);
     await p.evaluate(a => { V.i3v = "list"; V.i3 = a; render(); }, a2);
     const t = await txt(p);
-    for (const w of ["Relatório ISO Check", "Comparação com a auditoria anterior (01/06/2026)", "Referências utilizadas", "Causas possíveis", "não contém valores das normas ISO"]) ok(t.includes(w), "relatório sem: " + w);
+    for (const w of ["Relatório ISO Check", "Comparação com a auditoria anterior (01/06/2026 → 01/11/2026)", "Referências utilizadas", "Causas possíveis", "não contém valores das normas ISO"]) ok(t.includes(w), "relatório sem: " + w);
     ok(!/DEMO|fictício/.test(t), "relatório real com texto de demonstração");
     eq(await p.evaluate(fid => sstat(farms.find(f => f.id == fid), 2).st, fid), "cr", "status do Setor 3");
     ok(await p.evaluate(fid => falerts(farms.find(f => f.id == fid)).some(a => a.s == 2 && a.t.startsWith("ISO Check")), fid), "alerta do ISO Check na Central");
@@ -643,6 +643,50 @@ test("iso: demonstração identificada; telas do Setor 3 sem rolagem lateral no 
     eq(await p.evaluate(() => [sstat(farms[0], 2).st, sstat(farms[1], 2).st]), ["ok", "cr"], "status ISO das demo (Modelo bom, Crítica crítica)");
     noErrors(s.errors);
   } finally { await s.close(); }
+});
+
+test("iso: natureza da referência, componentes avaliados, antes × depois da manutenção e evolução por ensaio", async () => {
+  const s = await open(), p = s.page;
+  try {
+    const fid = await mkFarm(p, { name: "Fazenda ISO2" });
+    const e = await mkEq(p, fid, { fab: "GEA", mod: "G", ser: "1" });
+    await mkRf(p, { norma: "GEA", fab: "GEA", mod: "G", par: "vt", min: "44", max: "48", un: "kPa", fonte: "Manual G (teste)", ver: true, nat: "Especificação do fabricante" });
+    await mkRf(p, { norma: "ISO 6690", fab: "", par: "re", min: "400", un: "L/min", fonte: "Norma (teste)", ver: true });
+    await mkIso(p, { eid: e, date: "2026-05-01", v: { vt: "50", re: "350" }, ck: { "Teteiras": "Falha", "Filtros": "OK" } });
+    await p.evaluate(e => { V.me = e; FS.sv = Object.assign(NEW.sv(), { date: "2026-06-10", tipo: "Corretiva", prob: "Regulador sujo", parts: [{ n: "Membrana", q: "1", c: "50" }] }); gs("sv", chk8s); }, e);
+    const a2 = await mkIso(p, { eid: e, date: "2026-07-01", v: { vt: "46", re: "450" }, ck: { "Teteiras": "OK" } });
+    const x = await p.evaluate(() => { const A = DB.iso[0]; return evalIso(A, L("eq").find(q => q.id == A.eid)).probs.map(q => q.t); });
+    ok(x.some(t => t.startsWith("Componente — Teteiras: falha")), "componente em falha vira problema: " + x);
+    await p.evaluate(a => { V.i3v = "list"; go("sector", V.f, 2); V.i3 = a; render(); }, a2);
+    let t = await txt(p);
+    ok(t.includes("Antes × depois da manutenção (01/05/2026 → 01/07/2026)") && t.includes("Regulador sujo") && t.includes("Especificação do fabricante"), "antes × depois e natureza: " + t.slice(0, 300));
+    await p.evaluate(() => { V.i3 = null; V.i3k = "re"; render(); });
+    t = await txt(p);
+    ok(t.includes("Evolução por ensaio") && t.includes("Requisito normativo") && (await p.$$("svg.chart")).length >= 1, "evolução com faixa e natureza");
+    await p.evaluate(() => { V.i3v = "ref"; render(); });
+    t = await txt(p);
+    ok(t.includes("Especificação do fabricante") && t.includes("Requisito normativo"), "natureza na biblioteca");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
+test("navegação: ＋ Registrar abre todos os registros da fazenda a um toque (celular e computador)", async () => {
+  for (const viewport of [{ width: 390, height: 844 }, { width: 1366, height: 900 }]) {
+    const s = await open({ viewport }), p = s.page;
+    try {
+      const fid = await mkFarm(p, { name: "Fazenda Nav" });
+      await mkEq(p, fid, { fab: "GEA", mod: "Único", ser: "1" });
+      await p.evaluate(() => go("home"));
+      await p.click(viewport.width < 900 ? "nav .fab" : "#side >> text=＋ Registrar");
+      eq(await p.$$eval(".reg button", b => b.length), 12, "atalhos na folha");
+      await p.click(".reg >> text=Medição de equipamento");
+      eq(await p.evaluate(() => [V.v, V.s, V.e2t, !!V.e2, !!document.querySelector(".sheet")]), ["sector", 1, "med", true, false], "um toque até a medição do único equipamento");
+      await p.evaluate(() => { V.sheet = 1; render(); });
+      await p.click(".reg >> text=Teste de ordenha");
+      eq(await p.evaluate(() => [V.s, V.o]), [5, "cro"], "teste de ordenha");
+      noErrors(s.errors);
+    } finally { await s.close(); }
+  }
 });
 
 /* ===================== 3f. Setor 4: testes técnicos ===================== */

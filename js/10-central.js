@@ -251,6 +251,7 @@ function sideNav() {
   const f = F(), on = v => V.v == v ? " on" : "", opt = l => l.map(x => `<option value="${x.id}" ${x.id == f.id ? "selected" : ""}>${E(x.name)}</option>`).join("");
   const ss = V.v == "home" || V.v == "backup" ? null : allStat(f);
   return `<div class="brand">🥛 MilkIQ <small>Leite IA</small></div>
+<button class="btn" style="margin:0 4px 8px;width:auto" onclick="V.sheet=1;render()">＋ Registrar</button>
 <button class="si${on("home")}" onclick="go('home')"><span class="n">🏠</span>Fazendas</button>
 <div class="sh">Fazenda</div><div class="sfarm"><select aria-label="Fazenda atual" onchange="go(V.v=='kpi'?'kpi':'farm',this.value)">${realFarms().length ? `<optgroup label="Minhas fazendas">${opt(realFarms())}</optgroup>` : ""}<optgroup label="Demonstração">${opt(demoFarms())}</optgroup></select></div>
 <button class="si${on("farm")}" onclick="go('farm')"><span class="n">🧩</span>Central da fazenda</button>
@@ -263,15 +264,26 @@ function sectorStrip() {
   const f = F(), ss = allStat(f);
   return `<div class="strip noprint" aria-label="Setores">${SECT.map((s, i) => `<button class="${V.s == i ? "on" : ""}" onclick="go('sector',V.f,${i})"><span class="dot ${ss[i].st}"></span>${s[0]} ${i + 1}</button>`).join("")}</div>`;
 }
+/* "＋ Registrar": todos os registros da fazenda atual a um toque (folha na parte de baixo da tela) */
+const REG = [["🥛", "Análise de leite", "goTab(4,'an')"], ["⏱️", "Teste de ordenha", "goTab(5,'cro')"], ["⚙️", "Medição de equipamento", "regEq()"], ["📏", "Auditoria ISO Check", "go('sector',V.f,2);isoNew()"],
+  ["🔧", "Leite residual", "go('sector',V.f,3);ttNew('lr')"], ["🐄", "Avaliação de tetos", "goTab(4,'te')"], ["🧼", "Lavagem CIP", "goTab(6,'cy')"], ["💧", "Análise de água", "goTab(6,'wa')"],
+  ["🛠️", "Serviço de manutenção", "goTab(7,'mt')"], ["📝", "Visita", "VF=Object.assign(newVF(),{fid:V.f});VE=null;go('visit')"], ["✅", "Ação do plano", "V.r9v='pa';go('sector',V.f,8)"], ["🏡", "Nova fazenda", "newFarm()"]];
+function regEq() { const es = L("eq"); if (es.length == 1) goTab(1, "med", V.f, es[0].id); else goTab(1, "med"); }
+function regGo(i) { V.sheet = 0; new Function(REG[i][2])(); }
+function sheet() {
+  if (!V.sheet) return "";
+  const f = F(), opt = l => l.map(x => `<option value="${x.id}" ${x.id == f.id ? "selected" : ""}>${E(x.name)}</option>`).join("");
+  return `<div class="sheet-bg noprint" onclick="if(event.target===this){V.sheet=0;render()}"><div class="sheet" role="dialog" aria-label="Registrar"><div class="top"><b style="font-size:17px">Registrar</b><button class="btn s" onclick="V.sheet=0;render()">Fechar</button></div><label>Fazenda</label><select onchange="V.f=this.value;render()">${realFarms().length ? `<optgroup label="Minhas fazendas">${opt(realFarms())}</optgroup>` : ""}<optgroup label="Demonstração">${opt(demoFarms())}</optgroup></select>${f.demo ? '<p class="mu">Fazenda de demonstração: alguns registros ficam bloqueados para não misturar dados fictícios.</p>' : ""}<div class="reg">${REG.map((r, i) => `<button onclick="regGo(${i})"><span>${r[0]}</span>${r[1]}</button>`).join("")}</div></div></div>`;
+}
 function bottomNav() {
   const t = V.v == "sector" ? "farm" : V.v, N = [["home", "🏠", "Fazendas"], ["farm", "🧩", "Central"], ["kpi", "📊", "Indicadores"], ["backup", "💾", "Dados"]];
-  return N.map(n => `<button class="${t == n[0] ? "on" : ""}" onclick="go('${n[0]}')"><span>${n[1]}</span>${n[2]}</button>`).join("") + `<button class="fab" onclick="go('visit')"><span>＋</span>Visita</button>`;
+  return N.slice(0, 2).concat([null], N.slice(2)).map(n => n ? `<button class="${t == n[0] ? "on" : ""}" onclick="go('${n[0]}')"><span>${n[1]}</span>${n[2]}</button>` : `<button class="fab" onclick="V.sheet=1;render()" aria-label="Registrar"><span>＋</span>Registrar</button>`).join("");
 }
 function render() {
   if (!farms.some(x => x.id == V.f)) V.f = (realFarms()[0] || farms[0]).id;
   const m = { home, farm, kpi: kpiv, sector, visit, new: newf, backup: bkv, fdel: farmDelView };
   if (V.v == "backup" && !IDBS.est && typeof storageInfo == "function") storageInfo().then(() => { if (V.v == "backup") $("app").innerHTML = statusBar() + bkv(); });
-  $("app").innerHTML = statusBar() + (V.v == "sector" ? sectorStrip() : "") + (m[V.v] || home)();
+  $("app").innerHTML = statusBar() + (V.v == "sector" ? sectorStrip() : "") + (m[V.v] || home)() + sheet();
   $("nav").innerHTML = bottomNav();
   const sd = $("side"); if (sd) sd.innerHTML = sideNav();
   if (V.v == "sector" && V.s == 5) { calc(); tickT(); }

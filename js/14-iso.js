@@ -65,6 +65,7 @@ function evalIso(a, e) {
     const who = "pulsador " + (p.n || i + 1);
     ["ptax", "pa", "pb", "pc", "pd", "pdif"].forEach(k => one(k, p[k], who)); one("prel", rel, who);
   });
+  Object.entries(a.ck || {}).forEach(([k, v]) => { if (v == "Falha" || v == "Atenção") probs.push({ g: v == "Falha" ? "Alta" : "Média", t: `Componente — ${k}: ${v.toLowerCase()} na avaliação da auditoria`, c: CKC.c, a: CKC.a }); });
   probs.sort((x, y) => GR.indexOf(y.g) - GR.indexOf(x.g));
   const cf = rows.filter(x => x.st == "Conforme").length, nf = rows.filter(x => x.st == "Fora").length, nn = rows.filter(x => x.st == "Não avaliado").length;
   const st = probs.some(p => p.g == "Alta") ? "cr" : nf ? "wa" : cf ? "ok" : rows.length ? "na" : "sd";
@@ -73,7 +74,8 @@ function evalIso(a, e) {
 const isoOf = eid => L("iso").filter(a => a.eid == eid);
 
 /* ---------- estado do formulário ---------- */
-const newISO = () => ({ eid: "", date: TD(), tec: "", tipo: "Completa", cond: "", v: {}, pul: [], obs: "", concl: "" });
+const newISO = () => ({ eid: "", date: TD(), tec: "", tipo: "Completa", cond: "", v: {}, pul: [], ck: {}, obs: "", concl: "" });
+const CKC = { c: ["Desgaste, dano ou montagem incorreta do componente"], a: ["Revisar ou substituir conforme o manual do fabricante e registrar o serviço no Setor 8"] };
 let ISF = newISO(), ISE = null;
 DRF.push({ k: "iso", l: "Auditoria ISO Check (Setor 3)", s: 2, tv: "i3v", tab: "form", get: () => ({ f: ISF, id: ISE }), fresh: () => ({ f: newISO(), id: null }), set: v => { ISF = Object.assign(newISO(), v.f); ISE = DB.iso.some(x => x.id == v.id) ? v.id : null; } });
 
@@ -92,7 +94,14 @@ function isoList(f) {
   return (f.demo ? "" : `<button class="btn w" onclick="isoNew()">+ Nova auditoria ISO Check</button>`)
     + (nref ? "" : `<div class="banner">Nenhuma referência verificada cadastrada: os ensaios serão registrados como “Não avaliado”. Cadastre os valores da norma ou do fabricante em <b>Referências</b>, com a fonte.</div>`)
     + es.map(e => { const l = isoOf(e.id), la = lastOf(l), ev = la ? evalIso(la, e) : null;
-      return `<h2>${E(eqt(e))} ${e.demo ? '<span class="demo">DEMO</span>' : ""}</h2>` + (l.length ? [...l].reverse().map(a => { const x = evalIso(a, e); return `<div class="card tap" onclick="V.i3='${a.id}';render();scrollTo(0,0)"><div class="top"><b>${fmtD(a.date)} · ${E(a.tipo)}</b>${badge({ st: x.st, lab: x.lab })}</div><p class="mu">${x.rows.length} ensaio(s) · ${x.cf} conforme · ${x.nf} fora · ${x.nn} sem referência${a.tec ? " · " + E(a.tec) : ""}</p></div>`; }).join("") : '<div class="card mu">Nenhuma auditoria neste equipamento.</div>'); }).join("")
+      return `<h2>${E(eqt(e))} ${e.demo ? '<span class="demo">DEMO</span>' : ""}</h2>` + (l.length ? isoEvo(e, l) : "") + (l.length ? [...l].reverse().map(a => { const x = evalIso(a, e); return `<div class="card tap" onclick="V.i3='${a.id}';render();scrollTo(0,0)"><div class="top"><b>${fmtD(a.date)} · ${E(a.tipo)}</b>${badge({ st: x.st, lab: x.lab })}</div><p class="mu">${x.rows.length} ensaio(s) · ${x.cf} conforme · ${x.nf} fora · ${x.nn} sem referência${a.tec ? " · " + E(a.tec) : ""}</p></div>`; }).join("") : '<div class="card mu">Nenhuma auditoria neste equipamento.</div>'); }).join("")
+}
+/* evolução de um ensaio entre as auditorias do equipamento (média dos pulsadores nos ensaios por pulsador) */
+function isoEvo(e, l) {
+  const keys = ISOT.map(t => t[0]).filter(k => l.some(a => isoVals(a, e)[k])); if (!keys.length) return "";
+  const k = keys.includes(V.i3k) ? V.i3k : keys[0], t = IT[k], r = refFor(k, e, null);
+  const pts = l.map(a => { const v = isoVals(a, e)[k]; return { d: a.date, v: v ? v.reduce((s, x) => s + x.v, 0) / v.length : null }; });
+  return `<div class="card"><b>Evolução por ensaio</b><select style="margin-top:6px" onchange="V.i3k=this.value;render()">${keys.map(x => `<option value="${x}" ${x == k ? "selected" : ""}>${IT[x][1]}</option>`).join("")}</select>${tchart(pts, { dec: t[3], u: t[2], zero: false, lo: r ? num(r.min) : null, hi: r ? num(r.max) : null, label: t[1] })}<p class="mu">${t[1]} (${t[2]})${t[4] == "p" ? " — média dos pulsadores" : ""} · ${r ? `faixa: ${E(rng(r))} · ${E(natOf(r))} · ${E([r.norma, r.item, r.doc].filter(Boolean).join(" · "))} · fonte: ${E(r.fonte)}` : "sem referência verificada"}</p></div>`;
 }
 function isoNew(eid) { ISF = newISO(); ISF.eid = eid || (L("eq")[0] || {}).id || ""; ISE = null; V.i3v = "form"; V.i3 = null; V.note = null; render(); scrollTo(0, 0); }
 function isoEdit(id) { const a = DB.iso.find(x => x.id == id); if (!a) return note("Auditorias de demonstração não podem ser editadas."); ISF = Object.assign(newISO(), cp(a)); ISE = id; V.i3v = "form"; V.i3 = null; render(); scrollTo(0, 0); }
@@ -108,6 +117,7 @@ function isoForm(f) {
 ${grp("s")}
 <div class="card"><div class="top"><b>${ISOG.p}</b><button class="btn s" onclick="isoAddPul()">+ Pulsador</button></div>${ISF.pul.map((p, i) => `<div style="border-top:1px solid var(--bd);margin-top:8px;padding-top:6px"><div class="top"><span><label style="margin:0">Identificação</label><input style="max-width:160px" value="${E(p.n)}" oninput="ISF.pul[${i}].n=this.value"></span><button class="btn s" onclick="ISF.pul.splice(${i},1);render()">Remover</button></div><div class="grid">${["ptax", "pa", "pb", "pc", "pd", "prel", "pdif"].map(k => `<div><label>${IT[k][1]} (${IT[k][2]})</label>${inp(k, p[k], `ISF.pul[${i}].${k}=this.value`)}</div>`).join("")}</div></div>`).join("") || '<p class="mu">Nenhum pulsador medido. Toque em “+ Pulsador” para cada pulsador avaliado.</p>'}<p class="mu">Se a relação ficar vazia e as 4 fases forem informadas, ela é calculada: (a+b)/(a+b+c+d).</p></div>
 ${grp("d")}
+<div class="card"><b>Avaliação de componentes</b><div class="grid" style="margin-top:6px">${CK.map(k => `<div><label>${k}</label><select onchange="ISF.ck[${JSON.stringify(k).replace(/"/g, "&quot;")}]=this.value"><option value="">—</option>${["OK", "Atenção", "Falha"].map(o => `<option ${(ISF.ck || {})[k] == o ? "selected" : ""}>${o}</option>`).join("")}</select></div>`).join("")}</div></div>
 <div class="card"><label>Observações</label><textarea rows="2" oninput="ISF.obs=this.value">${E(ISF.obs)}</textarea><label>Conclusão do técnico</label><textarea rows="3" oninput="ISF.concl=this.value">${E(ISF.concl)}</textarea></div>
 <div class="acts"><button class="btn w" onclick="isoSave()">${ISE ? "Salvar alterações" : "Salvar auditoria"}</button><button class="btn gh w" onclick="ISF=newISO();ISE=null;V.i3v='list';render()">Cancelar</button></div>`;
 }
@@ -120,7 +130,8 @@ function isoSave() {
   a.pul.forEach(p => { const ph = ["pa", "pb", "pc", "pd"].filter(k => p[k] !== ""); if (ph.length && ph.length < 4) bad.push("fases a–d do pulsador " + p.n + " (informe as 4 ou nenhuma)"); });
   if (a.pul.some(p => num(p.prel) > 100)) bad.push("relação de pulsação acima de 100 %");
   if (bad.length) return note("Valores inválidos: " + bad.join(", ") + ".");
-  if (!Object.keys(a.v).length && !a.pul.some(p => ["ptax", "prel", "pa", "pdif"].some(k => p[k] !== ""))) return note("Registre ao menos um ensaio.");
+  a.ck = Object.fromEntries(Object.entries(a.ck || {}).filter(([k, v]) => CK.includes(k) && ["OK", "Atenção", "Falha"].includes(v)));
+  if (!Object.keys(a.v).length && !a.pul.some(p => ["ptax", "prel", "pa", "pdif"].some(k => p[k] !== "")) && !Object.keys(a.ck).length) return note("Registre ao menos um ensaio.");
   ["tec", "cond", "obs", "concl"].forEach(k => a[k] = String(a[k] || "").replace(/[<>]/g, "").slice(0, 3000));
   const old = ISE ? DB.iso.find(x => x.id == ISE) : null;
   a.id = old ? old.id : "iso" + Date.now(); a.fid = V.f; a.demo = false; a.created = old && old.created || new Date().toISOString(); a.updated = new Date().toISOString(); if (old && old.sig) a.sig = old.sig;
@@ -146,16 +157,17 @@ function isoDetail(f, a) {
   const e = L("eq").find(x => x.id == a.eid) || { fab: "?", mod: "(equipamento excluído)", id: a.eid }, x = evalIso(a, e);
   const prev = isoOf(a.eid).filter(y => y.date < a.date || (y.date == a.date && y.id < a.id)).pop(), px = prev ? evalIso(prev, e) : null;
   const used = [...new Set(x.rows.filter(r => r.r).map(r => r.r))];
-  const cmp = prev ? `<h2>Comparação com a auditoria anterior (${fmtD(prev.date)})</h2>${isoCmpTable(prev, a, e)}` : '<p class="mu">Primeira auditoria deste equipamento: sem comparação.</p>';
+  const svs = prev ? L("sv").filter(s => s.eid == a.eid && s.date >= prev.date && s.date <= a.date) : [];
+  const cmp = prev ? `<h2>${svs.length ? "Antes × depois da manutenção" : "Comparação com a auditoria anterior"} (${fmtD(prev.date)} → ${fmtD(a.date)})</h2>${svs.length ? `<p class="mu">Serviços entre as duas auditorias: ${svs.map(s => `${fmtD(s.date)} ${E(s.tipo)}${s.prob ? " — " + E(s.prob) : ""}${s.parts.length ? " (peças: " + s.parts.map(p => E(p.n)).join(", ") + ")" : ""}`).join("; ")}.</p>` : ""}${isoCmpTable(prev, a, e)}` : '<p class="mu">Primeira auditoria deste equipamento: sem comparação.</p>';
   return `<div class="pagehead noprint"><div><div class="crumb"><button onclick="go('farm','${f.id}')">${E(f.name)}</button> › <button onclick="V.i3=null;render()">ISO Check</button></div></div><div class="acts">${a.demo ? "" : `<button class="btn s" onclick="isoEdit('${a.id}')">Editar</button><button class="btn s" onclick="isoDel('${a.id}')">${V.del == a.id ? "Confirmar exclusão" : "Excluir"}</button>`}<button class="btn s" onclick="window.print()">Imprimir / PDF</button></div></div>` + e2note()
     + `<div class="card report"><h1>Relatório ISO Check</h1>${a.demo ? '<p><span class="demo" style="white-space:normal;display:inline-block">DADOS DE DEMONSTRAÇÃO — ensaios e referências fictícios, não é uma auditoria real</span></p>' : ""}
 <p><b>${E(f.name)}</b> · ${E(f.producer)} · ${E(f.city)}</p><p>${E(eqt(e))} · ${E(e.tipo || "")} ${e.nc ? "· " + E(e.nc) + " conjuntos" : ""}</p><p class="mu">Auditoria ${E(a.tipo)} em ${fmtD(a.date)}${a.tec ? " · técnico: " + E(a.tec) : ""}${a.cond ? " · " + E(a.cond) : ""}</p>
 <p>${badge({ st: x.st, lab: x.lab })} <span class="mu">${x.rows.length} ensaio(s) · ${x.cf} conforme · ${x.nf} fora da referência · ${x.nn} sem referência verificada</span></p>
-${["s", "d"].map(g => { const r = x.rows.filter(y => y.t[4] == g); return r.length ? `<h2>${ISOG[g]}</h2>${isoTable(r)}` : ""; }).join("")}
+${["s", "d"].map(g => { const r = x.rows.filter(y => y.t[4] == g); return r.length ? `<h2>${ISOG[g]}</h2>${isoTable(r)}` : ""; }).join("")}${Object.keys(a.ck || {}).length ? `<h2>Avaliação de componentes</h2><div class="ov"><table><tr><th>Componente</th><th>Situação</th></tr>${Object.entries(a.ck).map(([k, v]) => `<tr><td>${E(k)}</td><td class="${v == "Falha" ? "cr" : v == "Atenção" ? "wa" : "ok"}">${E(v)}</td></tr>`).join("")}</table></div>` : ""}
 ${x.rows.some(y => y.t[4] == "p") ? `<h2>${ISOG.p}</h2>${isoPulTable(x.rows.filter(y => y.t[4] == "p"))}` : ""}
 <h2>Problemas, causas possíveis e ações</h2>${probList(x.probs)}
 ${cmp}
-<h2>Referências utilizadas</h2>${used.length ? `<ul>${used.map(r => `<li>${E(parName(r.par))}: ${E(rng(r))} · ${E([r.norma, r.item, r.doc].filter(Boolean).join(" · "))} · ${r.fab ? E(r.fab) + " " + E(r.mod || "") : "todas as marcas"} · fonte: ${E(r.fonte)} · verificada</li>`).join("")}</ul>` : '<p class="mu">Nenhuma referência verificada aplicada: todos os ensaios aparecem como “Não avaliado”.</p>'}
+<h2>Referências utilizadas</h2>${used.length ? `<ul>${used.map(r => `<li>${E(parName(r.par))}: ${E(rng(r))} · ${E(natOf(r))} · ${E([r.norma, r.item, r.doc].filter(Boolean).join(" · "))} · ${r.fab ? E(r.fab) + " " + E(r.mod || "") : "todas as marcas"} · fonte: ${E(r.fonte)} · verificada</li>`).join("")}</ul>` : '<p class="mu">Nenhuma referência verificada aplicada: todos os ensaios aparecem como “Não avaliado”.</p>'}
 ${a.obs ? `<h2>Observações</h2><p style="white-space:pre-wrap">${E(a.obs)}</p>` : ""}<h2>Conclusão do técnico</h2><p style="white-space:pre-wrap">${E(a.concl || "—")}</p>
 <p class="mu">O MilkIQ não contém valores das normas ISO nem especificações GEA: a classificação usa apenas as referências cadastradas e verificadas pelo técnico, com a fonte indicada.</p>
 ${a.sig ? `<img src="${a.sig}" alt="Assinatura" style="max-width:100%;height:80px">` : ""}<p>${E(a.tec || "")}</p>
@@ -178,13 +190,15 @@ function isoCompare(f) {
 }
 
 /* ---------- biblioteca de referências (Setores 2, 3 e 8) ---------- */
-const newRF = () => Object.assign(NEW.rf(), { norma: "ISO 5707", item: "", fab: "" });
+const NAT = ["Requisito normativo", "Especificação do fabricante", "Recomendação técnica"];
+const natOf = r => r.nat || (/^ISO/.test(r.norma || "") ? NAT[0] : r.norma == "GEA" ? NAT[1] : NAT[2]);
+const newRF = () => Object.assign(NEW.rf(), { norma: "ISO 5707", item: "", fab: "", nat: NAT[0] });
 chkRf = o => !String(o.fonte || "").trim() ? "Informe a fonte (norma, manual ou boletim)." : (o.norma == "GEA" && !String(o.fab || "").trim()) ? "Referência GEA: informe o fabricante (GEA)." : num(o.min) == null && num(o.max) == null ? "Informe mínimo e/ou máximo." : nneg(o, ["min", "max"]) || (num(o.min) != null && num(o.max) != null && num(o.min) > num(o.max) ? "Mínimo maior que máximo." : null) || (o.mod && !o.fab ? "Para restringir a um modelo, informe também o fabricante." : null);
 function refLib(f) {
   const R = "rf", rf = L("rf"), fl = V.rfn || "", lst = rf.filter(r => !fl || (r.norma || "Outra") == fl);
   if (!FS.rf || FS.rf.norma == null) FS.rf = Object.assign(newRF(), FS.rf || {});
   return (f.demo ? "" : `<div class="card"><b>${FE.rf ? "Editar referência" : "Nova referência técnica"}</b>
-<div class="grid"><div><label>Norma / origem</label><select onchange="FS.rf.norma=this.value;if(this.value=='GEA'&&!FS.rf.fab)FS.rf.fab='GEA';render()">${NORMAS.map(n => `<option ${FS.rf.norma == n ? "selected" : ""}>${n}</option>`).join("")}</select></div>${fld(R, "item", "Item / cláusula / página")}
+<div class="grid"><div><label>Norma / origem</label><select onchange="FS.rf.norma=this.value;FS.rf.nat=/^ISO/.test(this.value)?NAT[0]:this.value=='GEA'?NAT[1]:NAT[2];if(this.value=='GEA'&&!FS.rf.fab)FS.rf.fab='GEA';render()">${NORMAS.map(n => `<option ${FS.rf.norma == n ? "selected" : ""}>${n}</option>`).join("")}</select></div>${fld(R, "item", "Item / cláusula / página")}<div style="grid-column:1/-1"><label>Natureza do valor</label><select onchange="FS.rf.nat=this.value">${NAT.map(n => `<option ${natOf(FS.rf) == n ? "selected" : ""}>${n}</option>`).join("")}</select></div>
 <div style="grid-column:1/-1"><label>Ensaio ou parâmetro</label><select onchange="FS.rf.par=this.value">${ALLPAR().map(p => `<option value="${p[0]}" ${FS.rf.par == p[0] ? "selected" : ""}>${p[1]} (${p[2]})</option>`).join("")}</select></div>
 ${fld(R, "min", "Mínimo", "n")}${fld(R, "max", "Máximo", "n")}${fld(R, "un", "Unidade")}${fld(R, "grav", "Gravidade se fora", "sel", GR)}
 ${fld(R, "fab", "Fabricante (vazio = todas as marcas)")}${fld(R, "mod", "Modelo (vazio = todos)")}<div style="grid-column:1/-1"><label>Ponto da instalação</label><select onchange="FS.rf.pt=this.value"><option value="">Medição geral / ensaio</option>${PTS.map(p => `<option ${FS.rf.pt == p ? "selected" : ""}>${p}</option>`).join("")}</select></div></div>
@@ -192,7 +206,7 @@ ${fld(R, "fonte", "Fonte (obrigatória: título da norma, manual ou boletim)")}$
 ${fld(R, "ver", "Conferi o valor no documento original (referência verificada)", "chk")}<br><div class="acts"><button class="btn w" onclick="gs('rf',chkRf,null,()=>{FS.rf=newRF()})">${FE.rf ? "Salvar alterações" : "Salvar referência"}</button>${FE.rf ? `<button class="btn gh w" onclick="FE.rf=null;FS.rf=newRF();render()">Cancelar</button>` : ""}</div>
 <p class="mu">O MilkIQ <b>não traz valores das normas ISO nem especificações GEA</b>. Digite os valores do documento original e marque como verificada; referências não verificadas ficam guardadas, mas não classificam medições.</p></div>`)
     + `<h2>Biblioteca (${rf.length})</h2><div class="tabs">${["", ...NORMAS].map(n => `<button class="tb ${fl == n ? "on" : ""}" onclick="V.rfn='${n}';render()">${n || "Todas"} (${rf.filter(r => !n || (r.norma || "Outra") == n).length})</button>`).join("")}</div>`
-    + (lst.map(r => `<div class="card"><div class="top"><b>${E(parName(r.par))}${r.pt ? " · " + E(r.pt) : ""}</b>${xbtn("rf", r, 1)}</div><p class="mu"><span class="badge in">${E(r.norma || "Outra")}</span> ${E(rng(r))} · <span class="${r.ver ? "ok" : "wa"}">${r.ver ? "verificada" : "NÃO verificada (não usada)"}</span> · gravidade ${E(r.grav)}</p><p class="mu">${r.fab ? E(r.fab) + " " + (E(r.mod) || "(todos os modelos)") : "Todas as marcas"}${r.item ? " · item " + E(r.item) : ""} · Fonte: ${E(r.fonte)}${r.doc ? " · " + E(r.doc) : ""}</p></div>`).join("") || '<div class="card mu">Nenhuma referência nesta categoria: os ensaios correspondentes aparecem como “Não avaliado”.</div>');
+    + (lst.map(r => `<div class="card"><div class="top"><b>${E(parName(r.par))}${r.pt ? " · " + E(r.pt) : ""}</b>${xbtn("rf", r, 1)}</div><p class="mu"><span class="badge in">${E(r.norma || "Outra")}</span> <span class="badge ${natOf(r) == NAT[0] ? "ok" : natOf(r) == NAT[1] ? "in" : "sd"}">${E(natOf(r))}</span> ${E(rng(r))} · <span class="${r.ver ? "ok" : "wa"}">${r.ver ? "verificada" : "NÃO verificada (não usada)"}</span> · gravidade ${E(r.grav)}</p><p class="mu">${r.fab ? E(r.fab) + " " + (E(r.mod) || "(todos os modelos)") : "Todas as marcas"}${r.item ? " · item " + E(r.item) : ""} · Fonte: ${E(r.fonte)}${r.doc ? " · " + E(r.doc) : ""}</p></div>`).join("") || '<div class="card mu">Nenhuma referência nesta categoria: os ensaios correspondentes aparecem como “Não avaliado”.</div>');
 }
 /* O Setor 2 passa a usar a mesma biblioteca completa. */
 eqRefs = refLib;
