@@ -131,7 +131,7 @@ function swUpdate() { if (!SW_WAITING) return; try { flushAll(); } catch (e) { }
 function updateNotice() {
   return SW_WAITING ? '<div class="alert in noprint" style="border-color:currentColor"><span style="color:var(--tx)">🔄 Nova versão do MilkIQ disponível. <button class="btn s" onclick="swUpdate()">Atualizar agora</button> <span class="mu">(seus dados são mantidos)</span></span></div>' : "";
 }
-const envNotice = () => MQ_ENV == "teste" ? '<div class="alert wa noprint" style="border-color:currentColor"><span style="color:var(--tx)">🧪 <b>Versão de testes.</b> Dados separados da versão estável. Use para conferir novidades; registros definitivos, na versão estável.</span></div>' : "";
+const envNotice = () => MQ_ENV == "previa" ? '<div class="alert in noprint" style="border-color:currentColor"><span style="color:var(--tx)">👀 <b>Prévia online.</b> Nesta prévia não há modo offline, impressão nem download de arquivos. Para usar no campo e instalar no celular, abra a versão publicada no GitHub Pages.</span></div>' : MQ_ENV == "teste" ? '<div class="alert wa noprint" style="border-color:currentColor"><span style="color:var(--tx)">🧪 <b>Versão de testes.</b> Dados separados da versão estável. Use para conferir novidades; registros definitivos, na versão estável.</span></div>' : "";
 
 /* Card de estado para a tela Dados. */
 function offlineCard() {
