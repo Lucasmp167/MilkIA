@@ -6,6 +6,9 @@ App web para gestão técnica de fazendas leiteiras, feito em HTML, CSS e JavaSc
 
 - **Versão estável:** https://lucasmp167.github.io/MilkIA/
 - **Versão de testes:** https://lucasmp167.github.io/MilkIA/teste/ (novidades antes de irem para a estável; usa **dados separados**)
+- **Prévia online (claude.ai, sem modo offline):** https://claude.ai/artifact/VzHZGQAfd7GcomjbK8eJkT
+
+> **Ativação única do GitHub Pages:** em *Settings → Pages → Build and deployment → Source: Deploy from a branch → Branch: `gh-pages` / `(root)` → Save*. O workflow publica no branch `gh-pages` a cada push, mas o GitHub não deixa a automação ativar o Pages sozinha.
 
 ### Instalar no Samsung (Android)
 1. Abra o link no **Chrome** ou no **Samsung Internet**, com internet, e espere a página carregar.
