@@ -25,3 +25,4 @@
 - A visita guiada (`js/18-visita.js`) usa `DB.vs` com `gst`/`steps`, sem coleção nova. A importação de laudos (`js/19-importar.js`) envolve `qAn`; datas inválidas, como 32/13, precisam ser recusadas.
 - Cronômetro por fase (`js/20-fases.js`): a vaca guarda `c.ph` (segundos por fase) ou `c.m` (marcos); use sempre `cd(c)`/`phMeans`, nunca `c.m` direto. A lista de fases se chama `FASES`, porque `PH` são as fotos dos tetos no `04`. As abas da fazenda estão em `FTABS` (`10-central.js`), e o relatório da fazenda é a view `frel` (`21-relfazenda.js`).
 - Interface (`js/22-interface.js`): `render` final; `tidy()` remove do HTML antigo a navegação e os avisos duplicados e formata datas aaaa-mm-dd em texto. Use as cores de texto `--onpr` sobre `--pr`, porque no tema escuro o destaque é claro.
+- Filtros (`js/23-filtros.js`): `withPeriod` restringe as listas (DB e demo) só durante o desenho de um gráfico e as restaura no `finally`. Nunca chame `svS()` dentro desse intervalo.

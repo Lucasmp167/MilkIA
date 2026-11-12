@@ -174,3 +174,4 @@ nav .fab{min-width:74px;padding:10px 14px;margin-top:-26px;border:4px solid var(
 
 /* texto sobre a cor de destaque com contraste nos dois temas */
 .btn,nav .fab,.tb.on{color:var(--onpr)}.btn.s,.btn.gh,.hero .btn{color:revert-layer}.btn.s{color:var(--pr)}.btn.gh{color:var(--tx)}.hero .btn{color:var(--pr3)}.hero .btn.gh{color:#fff}.btn.dg{color:#fff}
+.fbar{padding:8px 10px}.fbar label{margin-top:8px}

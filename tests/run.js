@@ -110,6 +110,7 @@ const INVENTORY = {
   "Ordenha v2 – turnos e ordenhadores": ["vTurnos", "vOps", "vDiag", "rank2", "met", "routineFindings", "opSave", "opFill", "opList", "colChart", "mchart", "assist", "assistCard", "producerSummary", "paFromFinding", "paKpi", "qualByTurn", "rotSet"],
   "Visita guiada e importação": ["gv", "gvStart", "gvSet", "gvFinish", "gvBar", "gvActive", "impCard", "impAnalyze", "impApply", "impFile", "csvRows", "impDate", "printHead"],
   "Cronômetro por fase, abas e relatório da fazenda": ["phToggle", "phReset", "phSaveCow", "phPanel", "phMeans", "gbar", "sectorStrip", "frel"],
+  "Filtros e gráfico de linha": ["perBar", "withPeriod", "fpLim"],
   "Offline / PWA": ["idbMirror", "bootOffline", "restoreFromIdb", "askPersist", "swRegister", "swUpdate", "offlineCard", "installCard", "netNotice"],
   "Etapa 1 – Central": ["sstat", "falerts", "fkpi", "kpiGrid", "tchart", "farmCard", "ficha", "farmDelView", "farmDelete", "farmCounts", "openEdit", "sideNav", "sectorStrip", "bottomNav", "render", "withFarm", "goTab"],
   "Dados/backup": ["ldS", "svS", "migrate", "initData", "drSnap", "drRestore", "buildFile", "bkExport", "bkCopy", "bkAnalyze", "bkApply", "bkUndo", "bkv", "hashHex"],
@@ -959,6 +960,30 @@ test("abas da fazenda e relatório da fazenda: tudo numa página, com comparaç�
     ok((await p.$$(".report svg.chart")).length >= 2, "gráficos no relatório (CCS e fases)");
     await p.evaluate(() => go("frel", "critica"));
     ok((await txt(p)).includes("DADOS DE DEMONSTRAÇÃO"), "relatório demo identificado");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
+test("gráficos antigos: linha com eixo e valores; filtro de período em Qualidade, CIP, Água e Manutenção sem alterar os dados", async () => {
+  const s = await open(), p = s.page;
+  try {
+    const fid = await mkFarm(p, { name: "Fazenda Filtro" });
+    await addAn(p, fid, { date: "2020-01-10", tk: "T1", ccs: "999" }); await addAn(p, fid, { date: DDnow(-5), tk: "T1", ccs: "200" }); await addAn(p, fid, { date: DDnow(-2), tk: "T1", ccs: "210" });
+    await p.evaluate(fid => { V.q = "ev"; V.qp = "ccs"; go("sector", fid, 4); }, fid);
+    let ch = await p.$eval("svg.chart", x => x.textContent);
+    ok(!ch.includes("999") && ch.includes("210"), "período padrão de 12 meses: " + ch);
+    await p.click(".fbar >> text=Tudo");
+    ch = await p.$eval("svg.chart", x => x.textContent);
+    ok(ch.includes("999"), "Tudo mostra a análise antiga");
+    eq(await p.evaluate(() => DB.an.length), 3, "dados intactos depois do filtro");
+    // CIP e manutenção (fazenda demo): filtro aparece e as listas voltam ao normal
+    const before = await p.evaluate(() => [DC.cy.length, DM.sv.length, DM.dx.length]);
+    for (const [s2, k, v] of [[6, "c", "gr"], [6, "c", "wa"], [7, "m8", "gr"]]) {
+      await p.evaluate(([s2, k, v]) => { V[k] = v; go("sector", "critica", s2); }, [s2, k, v]);
+      ok((await p.$$(".fbar .tb")).length == 4, `filtro de período em ${s2}/${v}`);
+      await p.click(".fbar >> text=3 meses");
+    }
+    eq(await p.evaluate(() => [DC.cy.length, DM.sv.length, DM.dx.length]), before, "listas restauradas após desenhar os gráficos");
     noErrors(s.errors);
   } finally { await s.close(); }
 });

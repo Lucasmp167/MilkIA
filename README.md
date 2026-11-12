@@ -73,6 +73,7 @@ js/19-importar.js importação de laudos (CSV/planilha copiada)
 js/20-fases.js    cronômetro por fase da rotina e gráficos agrupados
 js/21-relfazenda.js relatório da fazenda (uma página, período atual × anterior)
 js/22-interface.js apresentação: barra da fazenda, painel, blocos dos setores, formulários recolhidos
+js/23-filtros.js  filtros de período nos gráficos antigos; gráficos de linha e barras com valores
 legacy/           cópia original congelada (não editar) + SHA256SUMS
 tests/run.js      testes automatizados
 *.json            backup de 11/11 (usado como teste)
