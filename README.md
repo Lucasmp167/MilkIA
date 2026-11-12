@@ -61,6 +61,7 @@ tools/sw-template.js service worker (cache offline)
 tools/icons.js    gera os ícones PNG a partir dos SVG
 js/00-ambiente.js separa os dados da versão de testes
 js/13-offline.js  IndexedDB, conexão, instalação e atualização
+js/14-iso.js      Setor 3: ISO Check e biblioteca de referências
 legacy/           cópia original congelada (não editar) + SHA256SUMS
 tests/run.js      testes automatizados
 *.json            backup de 11/11 (usado como teste)
@@ -81,7 +82,7 @@ Cada fazenda tem sua Central, com indicadores, alertas e os 9 setores. O status 
 |---|-------|--------|
 | 1 | Cadastro da fazenda | **Funcional**: cadastrar, consultar (ficha), editar e excluir com confirmação + desfazer |
 | 2 | Ordenhadeiras e equipamentos | **Funcional**: várias ordenhadeiras por fazenda (GEA e outras marcas), ficha e configuração, componentes por bloco, esquema visual genérico, medições gerais e por ponto, avaliação só com referência verificada, problemas com causas e ações, pendências e histórico por equipamento, diagramas (oficial × não oficial), relatório individual, comparativo outra marca × GEA. Mesmo cadastro do Setor 8 |
-| 3 | ISO Check | Mostra as medições dos equipamentos; módulo próprio na Etapa 3 |
+| 3 | ISO Check | **Funcional**: auditorias por equipamento (ensaios estáticos, por pulsador e dinâmicos), avaliação só por referência verificada, problemas com causas e ações, comparação com a auditoria anterior, relatório com assinatura; **biblioteca de referências** ISO 5707 / ISO 6690 / GEA / outras, com fonte, item e status de verificação (o app não traz valores normativos) |
 | 4 | Testes técnicos | Planejado |
 | 5 | Qualidade do leite | **Funcional**: análises, evolução, antes/depois, tetos (escore manual, sem IA), indicadores/metas, relatório |
 | 6 | Otimização da ordenha | **Funcional**: cronômetro, comparação entre ordenhas, ranking, gráficos, histórico, relatório, calculadoras |

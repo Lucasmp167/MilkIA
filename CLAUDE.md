@@ -20,3 +20,4 @@
 - Gravação: `svS()` grava no localStorage e no IndexedDB (`idbMirror`). A partida é assíncrona (`bootOffline` em `99-inicio.js`), e os testes esperam `window.MQ_READY`.
 - Versão de testes (`/teste/`): `js/00-ambiente.js` prefixa as chaves `mq_*` com `teste_`. Nunca leia o localStorage por outro caminho que não seja `getItem`/`setItem`/`removeItem`.
 - Publicação: a estável é o commit em `deploy/ESTAVEL`. Só mude esse arquivo para um commit que já passou em `npm test` e no GitHub Actions.
+- ISO Check (`js/14-iso.js`): os ensaios (`ISOT`) têm só nome e unidade. A biblioteca é `DB.rf`, com `norma`/`item`/`doc`; `fab` vazio vale para todas as marcas, e `refFor` escolhe a referência mais específica. Dados v4 = coleção `iso`.

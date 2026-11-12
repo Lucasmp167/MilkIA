@@ -101,6 +101,7 @@ const INVENTORY = {
   "Setor 8 – manutenção": ["man", "vEq", "vMt", "vPc", "vDx", "vG8", "vR8", "cls", "probs"],
   "Fazendas/visitas": ["home", "farm", "kpiv", "sector", "visit", "saveVisit", "newf", "addFarm"],
   "Etapa 2 – Equipamentos": ["eqv", "eqList", "eqForm", "eqSave", "eqDetail", "eqResumo", "eqMed", "eqCmp", "eqHist", "eqReport", "eqCompare", "eqRefs", "eqSchema", "evalDx", "estat", "epend", "refFor", "judge", "addPt", "e2dgSave", "eqTimeline"],
+  "Etapa 3 – ISO Check": ["isov", "isoList", "isoForm", "isoSave", "isoDetail", "isoCompare", "isoCmpTable", "evalIso", "refLib", "isoDel", "isoSig", "isoAddPul"],
   "Offline / PWA": ["idbMirror", "bootOffline", "restoreFromIdb", "askPersist", "swRegister", "swUpdate", "offlineCard", "installCard", "netNotice"],
   "Etapa 1 – Central": ["sstat", "falerts", "fkpi", "kpiGrid", "tchart", "farmCard", "ficha", "farmDelView", "farmDelete", "farmCounts", "openEdit", "sideNav", "sectorStrip", "bottomNav", "render", "withFarm", "goTab"],
   "Dados/backup": ["ldS", "svS", "migrate", "initData", "drSnap", "drRestore", "buildFile", "bkExport", "bkCopy", "bkAnalyze", "bkApply", "bkUndo", "bkv", "hashHex"],
@@ -383,7 +384,7 @@ test("migração v2 → v3: a meta de CCS do cadastro vira meta de qualidade; da
     });
     await p.reload(); await p.waitForFunction(() => window.MQ_READY === true);
     const r = await p.evaluate(() => ({ ver: DB.meta.ver, gl: DB.gl.u1, an: DB.an.length, mig: DB.meta.migrated.map(m => m.from + ">" + m.to), st: allStat(farms.find(f => f.id == "u1"))[4].st, lh: fkpi(farms.find(f => f.id == "u1")).find(k => k.lab == "Litros/hora").v }));
-    eq(r, { ver: 3, gl: { ccs: 200 }, an: 1, mig: ["1>2", "2>3"], st: "wa", lh: null }, "migração");
+    eq(r, { ver: 4, gl: { ccs: 200 }, an: 1, mig: ["1>2", "2>3", "3>4"], st: "wa", lh: null }, "migração");
     noErrors(s.errors);
   } finally { await s.close(); }
 });
@@ -392,7 +393,7 @@ test("migração v2 → v3: a meta de CCS do cadastro vira meta de qualidade; da
 const mkEq = (p, fid, o) => p.evaluate(([fid, o]) => { go("sector", fid, 1); e2new(); Object.assign(FS.eq, o); eqSave(); return V.e2; }, [fid, o]);
 const mkCmp = (p, eid, o) => p.evaluate(([eid, o]) => { V.me = eid; FS.cmp = Object.assign(NEW.cmp(), o); gs("cmp", chk8c); }, [eid, o]);
 const mkDx = (p, eid, o) => p.evaluate(([eid, o]) => { V.me = eid; FE.dx = null; FS.dx = Object.assign(NEW.dx(), o); gs("dx", chkDx2); }, [eid, o]);
-const mkRf = (p, o) => p.evaluate(o => { FE.rf = null; FS.rf = Object.assign(NEW.rf(), o); gs("rf", chkRf); }, o);
+const mkRf = (p, o) => p.evaluate(o => { FE.rf = null; FS.rf = Object.assign(NEW.rf(), { norma: "Outra", item: "" }, o); gs("rf", chkRf); }, o);
 const evalOf = (p, eid) => p.evaluate(eid => { const e = L("eq").find(x => x.id == eid), d = lastOf(L("dx").filter(x => x.eid == eid)), r = evalDx(d, e); return { gen: Object.fromEntries(r.gen.filter(x => x.v != null).map(x => [x.p[0], x.st])), pts: r.pts.map(x => x.pt + ":" + x.st), probs: r.probs.map(x => x.g + "|" + x.t), causes: r.probs.map(x => x.c.length + x.a.length) }; }, eid);
 
 test("equipamentos: várias ordenhadeiras (GEA e outra marca) com cadastro completo, compartilhadas com o Setor 8", async () => {
@@ -569,6 +570,78 @@ test("backup: equipamentos, medições por ponto e diagramas sobrevivem a export
   } finally { await s2.close(); }
 });
 
+/* ===================== 3e. Etapa 3: ISO Check e biblioteca de referências ===================== */
+const mkIso = (p, o) => p.evaluate(o => { go("sector", V.f, 2); isoNew(o.eid); Object.assign(ISF, o); isoSave(); return DB.iso.length ? DB.iso[DB.iso.length - 1].id : null; }, o);
+
+test("iso: biblioteca — norma vale para todas as marcas, a referência mais específica vence, não verificada não classifica", async () => {
+  const s = await open(), p = s.page;
+  try {
+    const fid = await mkFarm(p, { name: "Fazenda ISO" });
+    const g = await mkEq(p, fid, { fab: "GEA", mod: "G1", ser: "1" }), o = await mkEq(p, fid, { fab: "Outra", mod: "O1", ser: "2" });
+    await p.evaluate(() => { go("sector", V.f, 2); V.i3v = "ref"; render(); });
+    await mkRf(p, { norma: "ISO 5707", item: "x.y", fab: "", par: "vt", min: "40", max: "50", un: "kPa", fonte: "Norma (teste)", ver: true });
+    await mkRf(p, { norma: "GEA", fab: "GEA", mod: "G1", par: "vt", min: "45", max: "47", un: "kPa", fonte: "Manual G1 (teste)", ver: true });
+    await mkRf(p, { norma: "ISO 6690", fab: "", par: "re", min: "500", fonte: "Não conferida", ver: false });
+    const r = await p.evaluate(([g, o]) => { const G = L("eq").find(e => e.id == g), O = L("eq").find(e => e.id == o); return [refFor("vt", G, null).fonte, refFor("vt", O, null).fonte, refFor("re", G, null)]; }, [g, o]);
+    eq(r, ["Manual G1 (teste)", "Norma (teste)", null], "escolha da referência");
+    // validações da biblioteca
+    for (const [o2, msg] of [[{ fonte: "", par: "vt", min: "1" }, "Informe a fonte"], [{ fonte: "F", par: "vt" }, "mínimo e/ou máximo"], [{ fonte: "F", norma: "GEA", fab: "", par: "vt", min: "1" }, "Referência GEA"], [{ fonte: "F", fab: "", mod: "X", par: "vt", min: "1" }, "informe também o fabricante"]]) {
+      await mkRf(p, Object.assign({ norma: "Outra" }, o2)); ok((await txt(p)).includes(msg), "validação ausente: " + msg);
+    }
+    eq(await p.evaluate(() => DB.rf.length), 3, "referências inválidas não podem ser gravadas");
+    const t = await txt(p);
+    ok(t.includes("não traz valores das normas ISO nem especificações GEA") && t.includes("Todas as marcas") && t.includes("NÃO verificada"), "avisos da biblioteca");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
+test("iso: auditoria (estáticos, pulsadores, dinâmicos) avaliada só por referência verificada; comparação, status e alerta", async () => {
+  const s = await open(), p = s.page;
+  try {
+    const fid = await mkFarm(p, { name: "Fazenda Aud" });
+    const e = await mkEq(p, fid, { fab: "GEA", mod: "G", ser: "1" });
+    const a1 = await mkIso(p, { eid: e, date: "2026-06-01", tec: "Ana", v: { vt: "47", re: "600" }, pul: [{ n: "1", ptax: "60", prel: "", pa: "150", pb: "450", pc: "150", pd: "250", pdif: "", obs: "" }] });
+    let x = await p.evaluate(a => { const A = DB.iso.find(i => i.id == a); return evalIso(A, L("eq").find(q => q.id == A.eid)); }, a1);
+    eq([x.rows.length, x.cf, x.nf, x.nn, x.st], [8, 0, 0, 8, "na"], "sem referência: tudo Não avaliado");
+    eq(x.rows.find(r => r.k == "prel").v, 60, "relação calculada pelas fases");
+    await mkRf(p, { norma: "ISO 5707", fab: "", par: "vt", min: "44", max: "48", un: "kPa", fonte: "Ref vt", ver: true, grav: "Alta" });
+    await mkRf(p, { norma: "ISO 6690", fab: "", par: "prel", min: "55", max: "65", un: "%", fonte: "Ref rel", ver: true });
+    const a2 = await mkIso(p, { eid: e, date: "2026-11-01", v: { vt: "50", re: "450" }, pul: [{ n: "A", ptax: "61", prel: "70", pa: "", pb: "", pc: "", pd: "", pdif: "", obs: "" }] });
+    x = await p.evaluate(a => { const A = DB.iso.find(i => i.id == a); const r = evalIso(A, L("eq").find(q => q.id == A.eid)); return { st: r.st, nf: r.nf, probs: r.probs.map(q => q.g + "|" + q.t), causes: r.probs.every(q => q.c.length && q.a.length) }; }, a2);
+    eq([x.st, x.nf, x.causes], ["cr", 2, true], "auditoria fora da referência");
+    ok(x.probs[0].startsWith("Alta|Vácuo de trabalho") && x.probs.some(q => q.includes("pulsador A") && q.includes("Ref rel")), "problemas: " + x.probs);
+    await p.evaluate(a => { V.i3v = "list"; V.i3 = a; render(); }, a2);
+    const t = await txt(p);
+    for (const w of ["Relatório ISO Check", "Comparação com a auditoria anterior (01/06/2026)", "Referências utilizadas", "Causas possíveis", "não contém valores das normas ISO"]) ok(t.includes(w), "relatório sem: " + w);
+    ok(!/DEMO|fictício/.test(t), "relatório real com texto de demonstração");
+    eq(await p.evaluate(fid => sstat(farms.find(f => f.id == fid), 2).st, fid), "cr", "status do Setor 3");
+    ok(await p.evaluate(fid => falerts(farms.find(f => f.id == fid)).some(a => a.s == 2 && a.t.startsWith("ISO Check")), fid), "alerta do ISO Check na Central");
+    // validações do formulário
+    for (const [o2, msg] of [[{ v: {}, pul: [] }, "ao menos um ensaio"], [{ v: { vt: "-1" } }, "Valores inválidos"], [{ v: {}, pul: [{ n: "1", ptax: "", prel: "", pa: "100", pb: "", pc: "", pd: "", pdif: "" }] }, "fases a–d"]]) {
+      await mkIso(p, Object.assign({ eid: e }, o2)); ok((await txt(p)).includes(msg), "validação ausente: " + msg);
+    }
+    eq(await p.evaluate(() => DB.iso.length), 2, "auditorias inválidas não podem ser gravadas");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
+test("iso: demonstração identificada; telas do Setor 3 sem rolagem lateral no celular", async () => {
+  const s = await open(), p = s.page;
+  try {
+    const bad = [];
+    for (const fid of ["modelo", "critica"]) {
+      for (const v of ["list", "cmp", "ref"]) { await p.evaluate(([fid, v]) => { V.i3 = null; V.i3v = v; go("sector", fid, 2); }, [fid, v]); const w = await p.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1); if (w) bad.push(fid + ":" + v); }
+      const ids = await p.evaluate(() => L("iso").map(a => a.id));
+      ok(ids.length >= 3, "demo sem auditorias: " + fid);
+      for (const id of ids) { await p.evaluate(id => { V.i3v = "list"; V.i3 = id; render(); }, id); if (await p.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) bad.push(id); }
+    }
+    ok(!bad.length, "rolagem lateral: " + bad);
+    ok((await txt(p)).includes("DADOS DE DEMONSTRAÇÃO"), "relatório demo sem identificação");
+    eq(await p.evaluate(() => [sstat(farms[0], 2).st, sstat(farms[1], 2).st]), ["ok", "cr"], "status ISO das demo (Modelo bom, Crítica crítica)");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
 /* ===================== 3d. Offline-first: site publicado, modo avião, banco do aparelho ===================== */
 let SITE = null;
 function buildSiteOnce() {
@@ -690,7 +763,7 @@ test("backup: o backup de 11/11 é aceito pela tela de importação", async () =
     await p.waitForFunction(() => BK.rep);
     const t = await txt(p);
     for (const c of ["Formato MilkIQ reconhecido", "Integridade confirmada (sha256)", "Estrutura e identificadores válidos"]) ok(t.includes(c), "faltou: " + c);
-    if (APP === "index.html") ok(t.includes("Versão dos dados do arquivo: v2 (será atualizada para v3)"), "backup v2 deveria ser atualizado para v3");
+    if (APP === "index.html") ok(t.includes("Versão dos dados do arquivo: v2 (será atualizada para v4)"), "backup v2 deveria ser atualizado para v4");
     await p.click("text=Importar (adicionar novos)");
     ok(/Importação concluída e verificada/.test(await txt(p)), "importação não concluída");
     noErrors(s.errors);
