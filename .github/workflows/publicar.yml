@@ -1,0 +1,72 @@
+name: Publicar
+# Testa e publica o MilkIQ no GitHub Pages (branch gh-pages):
+#   https://<usuário>.github.io/MilkIA/        → versão ESTÁVEL (commit indicado em deploy/ESTAVEL)
+#   https://<usuário>.github.io/MilkIA/teste/  → versão de TESTES (último commit testado deste branch)
+# A estável só muda quando deploy/ESTAVEL é atualizado com um commit que já passou nos testes.
+on:
+  push:
+    branches: [claude/milkiq-project-import-fwza38, main]
+  workflow_dispatch:
+permissions:
+  contents: write
+  pages: write
+concurrency:
+  group: publicar
+  cancel-in-progress: false
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npx playwright install --with-deps chromium
+      - name: Testes da versão de testes (este commit)
+        run: npm test
+      - name: Preparar a versão estável
+        run: |
+          REF=$(tr -d ' \n\r' < deploy/ESTAVEL)
+          echo "Estável: $REF"
+          git worktree add /tmp/estavel "$REF"
+          ln -s "$PWD/node_modules" /tmp/estavel/node_modules
+          if [ -f /tmp/estavel/tests/run.js ]; then (cd /tmp/estavel && node tests/run.js); fi
+          echo "ESTAVEL_SHA=$(git rev-parse "$REF")" >> "$GITHUB_ENV"
+      - name: Gerar o site (estável na raiz, testes em /teste/)
+        run: |
+          node tools/build-site.js --src /tmp/estavel --out site --env estavel --commit "$ESTAVEL_SHA"
+          node tools/build-site.js --src . --out site/teste --env teste --commit "$GITHUB_SHA"
+          touch site/.nojekyll
+          cat site/version.json site/teste/version.json
+      - name: Publicar no branch gh-pages
+        run: |
+          cd site
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Publicação: estável ${ESTAVEL_SHA::7} · testes ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" gh-pages
+      - name: Ativar o GitHub Pages (se ainda não estiver ativo)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api "repos/${{ github.repository }}/pages" >/dev/null 2>&1 && echo "Pages já ativo" && exit 0
+          gh api -X POST "repos/${{ github.repository }}/pages" -f "source[branch]=gh-pages" -f "source[path]=/" && echo "Pages ativado" || echo "::warning::Não foi possível ativar o Pages automaticamente. Ative em Settings → Pages → Branch: gh-pages / (root)."
+      - name: Conferir o site publicado
+        continue-on-error: true
+        run: |
+          OWNER=$(echo "${{ github.repository_owner }}" | tr 'A-Z' 'a-z'); REPO="${{ github.event.repository.name }}"
+          URL="https://$OWNER.github.io/$REPO"
+          for i in $(seq 1 30); do
+            V=$(curl -fsS "$URL/version.json" 2>/dev/null | grep -o '"commit": "[^"]*"' || true)
+            T=$(curl -fsS "$URL/teste/version.json" 2>/dev/null | grep -o '"commit": "[^"]*"' || true)
+            echo "tentativa $i · estável: ${V:-indisponível} · testes: ${T:-indisponível}"
+            if echo "$T" | grep -q "$GITHUB_SHA"; then echo "SITE OK: $URL/ e $URL/teste/"; exit 0; fi
+            sleep 20
+          done
+          echo "::warning::O site ainda não respondeu com esta versão."

@@ -16,3 +16,7 @@
 - `sector(1)` (com argumento) devolve a tela "placeholder" com as calculadoras; o Setor 6 usa isso na aba Calculadoras.
 - Equipamentos: os Setores 2 (`js/12-equipamentos.js`) e 8 compartilham `DB.eq/cmp/pl/sv/dx/pc/dg/rf` e os formulários `FS.*`. Nunca crie cadastro paralelo. O equipamento selecionado é `V.me` (no Setor 2, `V.e2`; a tela redefine `V.me` ao desenhar).
 - Medições só são avaliadas por `refFor`/`judge`: a referência precisa estar verificada, ser da mesma marca/modelo e, se tiver ponto, valer só para aquele ponto. Não escreva limites técnicos no código. Causas e ações (`CAUSE`) são só texto qualitativo.
+- Offline: o site publicado é gerado por `tools/build-site.js` (service worker `tools/sw-template.js`). Não registre o service worker no `index.html` de desenvolvimento; ele só é ativado pela meta `milkiq-sw` que o build injeta. Arquivo novo em `js/` entra automaticamente no cache, desde que esteja no `index.html`.
+- Gravação: `svS()` grava no localStorage e no IndexedDB (`idbMirror`). A partida é assíncrona (`bootOffline` em `99-inicio.js`), e os testes esperam `window.MQ_READY`.
+- Versão de testes (`/teste/`): `js/00-ambiente.js` prefixa as chaves `mq_*` com `teste_`. Nunca leia o localStorage por outro caminho que não seja `getItem`/`setItem`/`removeItem`.
+- Publicação: a estável é o commit em `deploy/ESTAVEL`. Só mude esse arquivo para um commit que já passou em `npm test` e no GitHub Actions.

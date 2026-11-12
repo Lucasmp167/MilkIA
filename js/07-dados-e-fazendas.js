@@ -1,5 +1,5 @@
 /* ===== Etapa 1: segurança dos dados e estabilidade ===== */
-const DATA_VER=3,APP_BUILD="etapa2-2026-11-12",DEMO_IDS=["modelo","critica"];
+const DATA_VER=3,APP_BUILD="2.1-offline-2026-11-12",DEMO_IDS=["modelo","critica"];
 const ARR=["sessions","an","ts","ev","cy","pq","wa","eq","cmp","pl","sv","dx","pc","dg","rf","vs","farms"],MAP=["gl","ob","cr","rp","rm"];
 const LAB={sessions:"Testes de ordenha",an:"Análises de leite",ts:"Avaliações de tetos",ev:"Eventos",cy:"Lavagens CIP",pq:"Produtos químicos",wa:"Análises de água",eq:"Equipamentos",cmp:"Componentes",pl:"Itens de revisão",sv:"Serviços",dx:"Medições",pc:"Peças",dg:"Diagramas",rf:"Referências técnicas",vs:"Visitas",farms:"Fazendas",gl:"Metas de qualidade",ob:"Observações de qualidade",cr:"Referências de limpeza",rp:"Relatório de limpeza",rm:"Relatório de manutenção"};
 const ID=/^[A-Za-z0-9_-]{1,64}$/,clean=s=>String(s==null?"":s).replace(/[<>]/g,"").slice(0,120);
@@ -66,15 +66,15 @@ function saveVisit(){const v=cp(VF);if(!v.fid)v.fid=V.f;if(!farms.some(f=>f.id==
  if(upsert("vs",v)){VF=newVF();VE=null;V.f=v.fid;note("Visita salva e conferida no armazenamento do navegador.",1)}else note(FAIL)}
 /* ===== cadastro de fazendas: ver js/11-fazendas.js ===== */
 /* ===== barra de estado e avisos ===== */
-function statusBar(){let h="";const A=(c,t)=>`<div class="alert ${c}" style="border-color:currentColor"><span style="color:var(--tx)">${t}</span></div>`;
- if(CORRUPT!==null)h+=A("cr","<b>Os dados salvos neste navegador estão ilegíveis.</b> Para proteger o original, nada será gravado agora.<br><button class=\"btn s\" onclick=\"bkRaw()\">Exportar texto original</button> <button class=\"btn s\" onclick=\"bkFresh()\">Começar do zero (mantém uma cópia)</button>");
+function statusBar(){let h=envNotice()+updateNotice()+netNotice();const A=(c,t)=>`<div class="alert ${c}" style="border-color:currentColor"><span style="color:var(--tx)">${t}</span></div>`;
+ if(CORRUPT!==null)h+=A("cr","<b>Os dados salvos neste navegador estão ilegíveis.</b> Para proteger o original, nada será gravado agora.<br><button class=\"btn s\" onclick=\"bkRaw()\">Exportar texto original</button> <button class=\"btn s\" onclick=\"bkFresh()\">Começar do zero (mantém uma cópia)</button>"+(IDB_COPY?"<br><button class=\"btn s\" onclick=\"restoreFromIdb()\">Restaurar a cópia do banco do aparelho"+(IDBS.copyTs?" ("+new Date(IDBS.copyTs).toLocaleString("pt-BR")+")":"")+"</button>":""));
  else if(MIGERR)h+=A("cr","Os dados são de uma versão incompatível: "+E(MIGERR)+". Nada será gravado.");
  else if(!STORE_OK)h+=A("cr","<b>Armazenamento indisponível neste navegador/ambiente.</b> Nada que você registrar será mantido após atualizar a página.");
  if(STORE_OK&&SV.ok===false)h+=A("cr","⚠ A última gravação <b>falhou</b> ("+E(SV.err)+"). Alterações recentes podem estar só na tela. Exporte um backup e libere espaço.");
  if(DRERR=="fail")h+=A("cr","⚠ Não foi possível guardar os rascunhos (espaço cheio ou armazenamento bloqueado).");
  if(DRERR=="photos")h+=A("wa","Rascunho guardado sem as fotos (espaço insuficiente). Salve o registro para não perdê-las.");
  if(DRBAD)h+=A("wa","Rascunhos antigos ilegíveis foram ignorados (cópia mantida).");
- if(STORE_OK&&(SV.len+DRLEN)>4e6)h+=A("wa","Armazenamento perto do limite estimado (~"+fm((SV.len+DRLEN)/1e6,1)+" de ~5 milhões de caracteres). Faça backup e evite muitas fotos.");
+ if(STORE_OK&&(SV.len+DRLEN)>4e6&&!IDBS.ok)h+=A("wa","Armazenamento perto do limite estimado (~"+fm((SV.len+DRLEN)/1e6,1)+" de ~5 milhões de caracteres). Faça backup e evite muitas fotos.");
  if(RECOV.length)h+=`<div class="card"><b>📝 Rascunhos recuperados</b><p class="mu">Estes formulários tinham dados não salvos antes de fechar ou atualizar a página.</p>${RECOV.map(r=>`<div class="top"><span>${E(r.l)} · ${E(fname(r.fid))} · ${hhmm(r.ts)}${r.np?" (sem fotos)":""}</span><span><button class="btn s" onclick="drOpen('${r.k}')">Abrir</button> <button class="btn s" onclick="drDiscard('${r.k}')">Descartar</button></span></div>`).join("")}<button class="btn s" onclick="RECOV=[];render()">Ocultar aviso</button></div>`;
  if(V.v=="home"&&STORE_OK&&ARR.some(k=>DB[k].length)){const lb=DB.meta&&DB.meta.lastExport,d=lb?Math.floor((Date.now()-new Date(lb))/864e5):null;if(d==null||d>=7)h+=A("wa","💾 "+(d==null?"Você ainda não gerou nenhum backup.":"Último backup há "+d+" dias.")+" <button class=\"btn s\" onclick=\"go('backup')\">Fazer backup</button>")}
  if(V.v!="sector"&&V.note)h+=A(V.note.ok?"ok":"cr",V.note.t);

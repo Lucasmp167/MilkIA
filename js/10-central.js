@@ -196,7 +196,7 @@ function hfilter(q) { q = q.toLowerCase(); document.querySelectorAll(".fcard").f
 
 function home() {
   const R = realFarms(), D = demoFarms();
-  return `<div class="pagehead"><div><h1>Fazendas</h1><div class="mu">${R.length ? R.length + " fazenda(s) cadastrada(s)" : "Nenhuma fazenda cadastrada"}</div></div><button class="btn w" onclick="newFarm()">+ Cadastrar fazenda</button></div>`
+  return installCard() + `<div class="pagehead"><div><h1>Fazendas</h1><div class="mu">${R.length ? R.length + " fazenda(s) cadastrada(s)" : "Nenhuma fazenda cadastrada"}</div></div><button class="btn w" onclick="newFarm()">+ Cadastrar fazenda</button></div>`
     + (farms.length > 4 ? `<input class="search" type="search" placeholder="Buscar fazenda, produtor ou cidade" oninput="hfilter(this.value)">` : "")
     + "<h2>Minhas fazendas</h2>"
     + (R.length ? `<div class="two">${R.map(farmCard).join("")}</div>` : `<div class="card empty"><div class="big">🏡</div><b>Cadastre sua primeira fazenda</b><p class="mu">Cada fazenda tem sua própria Central com os 9 setores. Os dados ficam separados por fazenda.</p><br><button class="btn w" onclick="newFarm()">+ Cadastrar fazenda</button></div>`)
@@ -254,7 +254,7 @@ function sideNav() {
 <button class="si${on("kpi")}" onclick="go('kpi')"><span class="n">📊</span>Indicadores</button>
 <div class="sh">Setores</div>${SECT.map((s, i) => `<button class="si${V.v == "sector" && V.s == i ? " on" : ""}" onclick="go('sector',V.f,${i})"><span class="n">${s[0]}</span>${i + 1}. ${s[1]}${ss ? `<span class="dot ${ss[i].st}" title="${E(ss[i].lab)}"></span>` : ""}</button>`).join("")}
 <div class="sh">Geral</div><button class="si${on("visit")}" onclick="go('visit')"><span class="n">📝</span>Visitas</button><button class="si${on("backup")}" onclick="go('backup')"><span class="n">💾</span>Dados e backup</button>
-<div class="sfoot">Dados neste navegador · app ${APP_BUILD}</div>`;
+<div class="sfoot">${netChip()}<br>Dados neste aparelho · ${MQ_ENV == "teste" ? "versão de testes · " : ""}app ${APP_BUILD}</div>`;
 }
 function sectorStrip() {
   const f = F(), ss = allStat(f);
@@ -267,6 +267,7 @@ function bottomNav() {
 function render() {
   if (!farms.some(x => x.id == V.f)) V.f = (realFarms()[0] || farms[0]).id;
   const m = { home, farm, kpi: kpiv, sector, visit, new: newf, backup: bkv, fdel: farmDelView };
+  if (V.v == "backup" && !IDBS.est && typeof storageInfo == "function") storageInfo().then(() => { if (V.v == "backup") $("app").innerHTML = statusBar() + bkv(); });
   $("app").innerHTML = statusBar() + (V.v == "sector" ? sectorStrip() : "") + (m[V.v] || home)();
   $("nav").innerHTML = bottomNav();
   const sd = $("side"); if (sd) sd.innerHTML = sideNav();

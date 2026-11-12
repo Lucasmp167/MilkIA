@@ -2,13 +2,32 @@
 
 App web para gestão técnica de fazendas leiteiras, feito em HTML, CSS e JavaScript puros, sem dependências externas. Para abrir, basta `index.html`. `npm run build` gera `dist/milkiq.html`, uma versão em arquivo único para compartilhar.
 
-## Como rodar
+## Usar o app
 
-Abra `index.html` no navegador, ou sirva a pasta:
+- **Versão estável:** https://lucasmp167.github.io/MilkIA/
+- **Versão de testes:** https://lucasmp167.github.io/MilkIA/teste/ (novidades antes de irem para a estável; usa **dados separados**)
 
-```bash
-python3 -m http.server 8000   # depois acesse http://localhost:8000
-```
+### Instalar no Samsung (Android)
+1. Abra o link no **Chrome** ou no **Samsung Internet**, com internet, e espere a página carregar.
+2. Chrome: toque em **⋮ → Instalar app** (ou **Adicionar à tela inicial → Instalar**). Samsung Internet: toque em **☰ → Adicionar página a → Tela inicial** (ou no ícone de instalar na barra de endereço). O app também mostra um botão **📲 Instalar** quando o navegador permite.
+3. O ícone do MilkIQ aparece na tela inicial. A partir daí ele abre em tela cheia e **funciona sem internet**.
+
+### Sem internet
+- Depois da primeira abertura, todo o app fica guardado no aparelho (service worker).
+- Os dados ficam no banco do aparelho (IndexedDB), com cópia rápida no localStorage. O app pede ao navegador para não apagá-los.
+- Quando sair uma versão nova, aparece **“Atualizar agora”**, e os dados são mantidos.
+- Não há nuvem: para levar os dados a outro aparelho, use **Dados → Gerar backup**.
+
+### Publicação
+O workflow `.github/workflows/publicar.yml` roda os testes e publica no branch `gh-pages`:
+- a **estável** é o commit indicado em `deploy/ESTAVEL`, depois de passar nos próprios testes;
+- a de **testes** é o último commit do branch.
+
+Para promover uma versão, troque o commit em `deploy/ESTAVEL`.
+
+## Rodar localmente
+
+Abra `index.html` no navegador, ou sirva a pasta com `python3 -m http.server 8000` e acesse http://localhost:8000. Para testar o site publicável (offline/PWA): `node tools/build-site.js --out site` e sirva a pasta `site/`.
 
 ## Testes
 
@@ -37,6 +56,11 @@ js/11-fazendas.js cadastro, ficha, edição e exclusão de fazendas
 js/12-equipamentos.js Setor 2: ordenhadeiras, medições, componentes, relatórios
 js/99-inicio.js   partida do app
 tools/bundle.js   gera o arquivo único dist/milkiq.html
+tools/build-site.js  gera o site publicável (PWA offline): estável e testes
+tools/sw-template.js service worker (cache offline)
+tools/icons.js    gera os ícones PNG a partir dos SVG
+js/00-ambiente.js separa os dados da versão de testes
+js/13-offline.js  IndexedDB, conexão, instalação e atualização
 legacy/           cópia original congelada (não editar) + SHA256SUMS
 tests/run.js      testes automatizados
 *.json            backup de 11/11 (usado como teste)

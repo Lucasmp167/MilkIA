@@ -70,6 +70,7 @@ ul{padding-left:18px;margin:6px 0}.res{font-weight:700;color:var(--pr)}
 .empty{text-align:center;padding:22px 14px}.empty .big{font-size:34px}
 .ctr{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
 aside#side{display:none}
+.chip{display:inline-block;font-size:11px;font-weight:650;padding:1px 7px;border-radius:99px;background:var(--card2);border:1px solid var(--bd)}
 .hide-m{display:none}
 
 /* computador: menu lateral fixo, conteúdo mais largo, mais colunas */

@@ -29,9 +29,10 @@ const eq = (a, b, msg) => { if (JSON.stringify(a) !== JSON.stringify(b)) throw n
 
 /* ---------- servidor estático local ---------- */
 function serve() {
-  const types = { ".html": "text/html; charset=utf-8", ".json": "application/json", ".js": "text/javascript", ".css": "text/css" };
+  const types = { ".html": "text/html; charset=utf-8", ".json": "application/json", ".js": "text/javascript", ".css": "text/css", ".webmanifest": "application/manifest+json", ".svg": "image/svg+xml", ".png": "image/png" };
   const srv = http.createServer((req, res) => {
-    const p = path.join(ROOT, decodeURIComponent(req.url.split("?")[0]));
+    let p = path.join(ROOT, decodeURIComponent(req.url.split("?")[0]));
+    if (p.startsWith(ROOT) && fs.existsSync(p) && fs.statSync(p).isDirectory()) p = path.join(p, "index.html"); // como o GitHub Pages
     if (!p.startsWith(ROOT) || !fs.existsSync(p) || fs.statSync(p).isDirectory()) { res.writeHead(404); return res.end(); }
     res.writeHead(200, { "content-type": types[path.extname(p)] || "application/octet-stream" });
     fs.createReadStream(p).pipe(res);
@@ -49,7 +50,7 @@ async function open(opts = {}) {
   page.on("console", m => { if (m.type() === "error") errors.push("console: " + m.text()); });
   page.on("dialog", d => d.dismiss());
   await page.goto(`${base}/${opts.app || APP}`);
-  await page.waitForFunction(() => typeof render == "function" && document.querySelector("#app").children.length > 0);
+  await page.waitForFunction(() => window.MQ_READY === true);
   return { ctx, page, errors, close: () => ctx.close() };
 }
 const txt = page => page.textContent("#app");
@@ -100,6 +101,7 @@ const INVENTORY = {
   "Setor 8 – manutenção": ["man", "vEq", "vMt", "vPc", "vDx", "vG8", "vR8", "cls", "probs"],
   "Fazendas/visitas": ["home", "farm", "kpiv", "sector", "visit", "saveVisit", "newf", "addFarm"],
   "Etapa 2 – Equipamentos": ["eqv", "eqList", "eqForm", "eqSave", "eqDetail", "eqResumo", "eqMed", "eqCmp", "eqHist", "eqReport", "eqCompare", "eqRefs", "eqSchema", "evalDx", "estat", "epend", "refFor", "judge", "addPt", "e2dgSave", "eqTimeline"],
+  "Offline / PWA": ["idbMirror", "bootOffline", "restoreFromIdb", "askPersist", "swRegister", "swUpdate", "offlineCard", "installCard", "netNotice"],
   "Etapa 1 – Central": ["sstat", "falerts", "fkpi", "kpiGrid", "tchart", "farmCard", "ficha", "farmDelView", "farmDelete", "farmCounts", "openEdit", "sideNav", "sectorStrip", "bottomNav", "render", "withFarm", "goTab"],
   "Dados/backup": ["ldS", "svS", "migrate", "initData", "drSnap", "drRestore", "buildFile", "bkExport", "bkCopy", "bkAnalyze", "bkApply", "bkUndo", "bkv", "hashHex"],
 };
@@ -184,7 +186,7 @@ test("fluxo: fazenda real + análise + teste de ordenha + visita persistem após
     eq(before, { an: 1, ss: 1, vs: 1, farms: 1 }, "registros após salvar");
     await p.evaluate(() => flushAll());
     await p.reload();
-    await p.waitForFunction(() => typeof render == "function");
+    await p.waitForFunction(() => window.MQ_READY === true);
     const after = await p.evaluate(fid => ({ an: DB.an.filter(x => x.fid == fid).length, ss: DB.sessions.filter(x => x.fid == fid).length, vs: DB.vs.filter(x => x.fid == fid).length, farm: farms.some(f => f.id == fid && !f.demo) }), fid);
     eq(after, { an: 1, ss: 1, vs: 1, farm: true }, "registros após recarregar");
     const a = await p.evaluate(() => DB.an[0]);
@@ -198,7 +200,7 @@ test("fluxo: rascunho do formulário é recuperado após recarregar", async () =
   try {
     await p.evaluate(() => { go("sector", "modelo", 4); V.q = "an"; render(); AF.lab = "Laboratório Rascunho"; drSnap(); drFlush(); });
     await p.reload();
-    await p.waitForFunction(() => typeof render == "function");
+    await p.waitForFunction(() => window.MQ_READY === true);
     eq(await p.evaluate(() => AF.lab), "Laboratório Rascunho", "rascunho restaurado");
     ok(/Rascunhos recuperados/.test(await txt(p)), "aviso de rascunho recuperado ausente");
     noErrors(s.errors);
@@ -210,7 +212,7 @@ const mkFarm = (p, o) => p.evaluate(o => { NF = Object.assign(newNF(), o); NFE =
 const addAn = (p, fid, o) => p.evaluate(([fid, o]) => { go("sector", fid, 4); AF = Object.assign(newAF(), o); asave(); }, [fid, o]);
 const kpiOf = (p, fid) => p.evaluate(fid => Object.fromEntries(fkpi(farms.find(f => f.id == fid)).map(k => [k.lab, k.v])), fid);
 const statOf = (p, fid) => p.evaluate(fid => allStat(farms.find(f => f.id == fid)).map(s => s.st), fid);
-const reload = async p => { await p.evaluate(() => flushAll()); await p.reload(); await p.waitForFunction(() => typeof render == "function" && document.querySelector("#app").children.length > 0); };
+const reload = async p => { await p.evaluate(() => flushAll()); await p.reload(); await p.waitForFunction(() => window.MQ_READY === true); };
 
 test("fazendas: cadastrar com todos os campos, consultar e editar (persistem após recarregar)", async () => {
   const s = await open(), p = s.page;
@@ -379,7 +381,7 @@ test("migração v2 → v3: a meta de CCS do cadastro vira meta de qualidade; da
         gl: {}, ob: {}, cr: {}, rp: {}, rm: {}, meta: { ver: 2, migrated: [{ from: 1, to: 2, at: "2026-11-11T00:00:00Z" }] } };
       localStorage.setItem("mq_ord", JSON.stringify(v2));
     });
-    await p.reload(); await p.waitForFunction(() => typeof render == "function");
+    await p.reload(); await p.waitForFunction(() => window.MQ_READY === true);
     const r = await p.evaluate(() => ({ ver: DB.meta.ver, gl: DB.gl.u1, an: DB.an.length, mig: DB.meta.migrated.map(m => m.from + ">" + m.to), st: allStat(farms.find(f => f.id == "u1"))[4].st, lh: fkpi(farms.find(f => f.id == "u1")).find(k => k.lab == "Litros/hora").v }));
     eq(r, { ver: 3, gl: { ccs: 200 }, an: 1, mig: ["1>2", "2>3"], st: "wa", lh: null }, "migração");
     noErrors(s.errors);
@@ -567,6 +569,105 @@ test("backup: equipamentos, medições por ponto e diagramas sobrevivem a export
   } finally { await s2.close(); }
 });
 
+/* ===================== 3d. Offline-first: site publicado, modo avião, banco do aparelho ===================== */
+let SITE = null;
+function buildSiteOnce() {
+  if (SITE) return SITE;
+  const { build } = require("../tools/build-site.js"), out = path.join(OUT, "site");
+  fs.rmSync(out, { recursive: true, force: true });
+  build({ out, env: "estavel" }); build({ out: path.join(out, "teste"), env: "teste" });
+  return (SITE = path.relative(ROOT, out));
+}
+const offlineReady = p => p.waitForFunction(() => navigator.serviceWorker && navigator.serviceWorker.controller && window.MQ_READY === true, null, { timeout: 15000 });
+
+test("offline: site publicado instala o app e funciona em modo avião (abrir, navegar, cadastrar, reabrir)", async () => {
+  if (APP !== "index.html") return;
+  const site = buildSiteOnce();
+  const s = await open({ app: site + "/index.html" }), p = s.page;
+  try {
+    await offlineReady(p);
+    const fid = await mkFarm(p, { name: "Fazenda Online", goal: "300" });
+    await addAn(p, fid, { ccs: "250" });
+    await s.ctx.setOffline(true);                                   // modo avião
+    await p.reload(); await p.waitForFunction(() => window.MQ_READY === true);
+    ok((await txt(p)).includes("Sem internet"), "aviso de sem internet ausente");
+    eq(await p.evaluate(() => farms.filter(f => !f.demo).map(f => f.name)), ["Fazenda Online"], "dados após reabrir offline");
+    // trabalhar offline: análise, teste de ordenha, CIP, visita, equipamento + medição
+    await addAn(p, fid, { ccs: "350" });
+    await p.evaluate(fid => { go("sector", fid, 5); V.o = "cro"; render(); dset("milker", "X"); T.n = "7"; tstart(); T.acc = 20; tfin(); tsave(); ssave(); go("visit"); VF = Object.assign(newVF(), { fid, notas: "offline" }); saveVisit(); }, fid);
+    const e = await mkEq(p, fid, { fab: "GEA", mod: "Off", ser: "1" });
+    await mkDx(p, e, { date: "2026-11-10", vac: "46", pts: [{ pt: "Regulador", par: "vac", v: "45" }] });
+    for (const sct of [0, 1, 2, 3, 4, 5, 6, 7, 8]) await p.evaluate(([fid, sct]) => { V.e2 = null; go("sector", fid, sct); }, [fid, sct]);
+    await p.evaluate(fid => { go("kpi", fid); go("backup"); }, fid);
+    // fechar o app e abrir de novo, ainda offline
+    await p.evaluate(() => flushAll()); await p.evaluate(() => idbFlush());
+    await p.close();
+    const p2 = await s.ctx.newPage(); const err2 = []; p2.on("pageerror", x => err2.push(x.message));
+    await p2.goto(`${base}/${site}/index.html`); await p2.waitForFunction(() => window.MQ_READY === true);
+    const r = await p2.evaluate(fid => ({ an: DB.an.filter(x => x.fid == fid).length, ss: DB.sessions.length, vs: DB.vs.length, eq: DB.eq.length, pts: DB.dx[0].pts.length, sw: !!navigator.serviceWorker.controller }), fid);
+    eq(r, { an: 2, ss: 1, vs: 1, eq: 1, pts: 1, sw: true }, "dados após fechar e reabrir offline");
+    // relatório offline (tela de impressão disponível)
+    await p2.evaluate(fid => { V.q = "rl"; go("sector", fid, 4); }, fid);
+    ok((await p2.textContent("#app")).includes("Imprimir / salvar em PDF"), "relatório offline");
+    await s.ctx.setOffline(false);
+    eq(err2, [], "erros na página reaberta");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
+test("offline: versões estável e de testes usam dados separados", async () => {
+  if (APP !== "index.html") return;
+  const site = buildSiteOnce();
+  const s = await open({ app: site + "/index.html" }), p = s.page;
+  try {
+    await mkFarm(p, { name: "Só na estável" });
+    await p.goto(`${base}/${site}/teste/index.html`); await p.waitForFunction(() => window.MQ_READY === true);
+    const t = await txt(p);
+    ok(t.includes("Versão de testes"), "aviso de versão de testes ausente");
+    eq(await p.evaluate(() => farms.filter(f => !f.demo).length), 0, "a versão de testes viu dados da estável");
+    await mkFarm(p, { name: "Só no teste" });
+    await p.goto(`${base}/${site}/index.html`); await p.waitForFunction(() => window.MQ_READY === true);
+    eq(await p.evaluate(() => farms.filter(f => !f.demo).map(f => f.name)), ["Só na estável"], "a estável viu dados de testes");
+    const man = JSON.parse(fs.readFileSync(path.join(ROOT, site, "manifest.webmanifest"), "utf8"));
+    eq([man.display, man.start_url, man.icons.some(i => i.sizes == "192x192"), man.icons.some(i => i.sizes == "512x512"), man.icons.some(i => i.purpose == "maskable")], ["standalone", "./", true, true, true], "manifesto instalável");
+    ok(fs.readFileSync(path.join(ROOT, site, "sw.js"), "utf8").includes('addEventListener("fetch"'), "service worker sem tratamento offline");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
+test("armazenamento: localStorage cheio → continua gravando no banco do aparelho (IndexedDB) e recupera ao reabrir", async () => {
+  const s = await open(), p = s.page;
+  try {
+    await p.evaluate(() => { const o = Storage.prototype.setItem; Storage.prototype.setItem = function (k, v) { if (k == "mq_ord") { const e = new Error("cheio"); e.name = "QuotaExceededError"; throw e; } return o.call(this, k, v); }; });
+    await mkFarm(p, { name: "Fazenda Grande" });
+    eq(await p.evaluate(() => [SV.ok, SV.mode, DB.farms.length]), [true, "idb", 1], "gravação com localStorage cheio");
+    await p.evaluate(() => idbFlush());
+    eq(await p.evaluate(() => IDBS.err), null, "erro no IndexedDB");
+    await p.reload(); await p.waitForFunction(() => window.MQ_READY === true);
+    eq(await p.evaluate(() => [farms.filter(f => !f.demo).map(f => f.name), SV.loadedFrom]), [["Fazenda Grande"], "idb"], "dados recuperados do IndexedDB");
+    // localStorage apagado: recupera do IndexedDB
+    await p.evaluate(() => localStorage.removeItem("mq_ord"));
+    await p.reload(); await p.waitForFunction(() => window.MQ_READY === true);
+    eq(await p.evaluate(() => farms.filter(f => !f.demo).map(f => f.name)), ["Fazenda Grande"], "dados recuperados com localStorage vazio");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
+test("armazenamento: dados ilegíveis não são substituídos sozinhos; usuário pode restaurar a cópia do aparelho", async () => {
+  const s = await open(), p = s.page;
+  try {
+    await mkFarm(p, { name: "Fazenda Segura" }); await p.evaluate(() => idbFlush());
+    await p.evaluate(() => localStorage.setItem("mq_ord", "{quebrado"));
+    await p.reload(); await p.waitForFunction(() => window.MQ_READY === true);
+    const t = await txt(p);
+    ok(t.includes("estão ilegíveis") && t.includes("Restaurar a cópia do banco do aparelho"), "opção de restauração ausente");
+    eq(await p.evaluate(() => localStorage.getItem("mq_ord")), "{quebrado", "original ilegível foi sobrescrito sem pedir");
+    await p.click("text=Restaurar a cópia do banco do aparelho");
+    eq(await p.evaluate(() => [farms.filter(f => !f.demo).map(f => f.name), Object.keys(localStorage).some(k => k.startsWith("mq_corrupt_"))]), [["Fazenda Segura"], true], "restauração (com cópia do texto ilegível)");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
 /* ===================== 4. Backup ===================== */
 async function exportFile(p) {
   await p.evaluate(() => go("backup"));
@@ -627,7 +728,7 @@ test("backup: exportar → importar em navegador limpo restaura os dados reais (
     const r = await p2.evaluate(() => ({ farms: DB.farms.map(f => f.name), an: DB.an.map(a => a.ccs), stored: JSON.parse(localStorage.getItem("mq_ord")).an.length }));
     eq(r, { farms: ["Fazenda Backup"], an: [200], stored: 1 }, "dados após importar (sem registros de teste)");
     await p2.reload();
-    await p2.waitForFunction(() => typeof render == "function");
+    await p2.waitForFunction(() => window.MQ_READY === true);
     ok(await p2.evaluate(() => farms.some(f => f.name == "Fazenda Backup")), "fazenda importada sumiu ao recarregar");
     // desfazer importação
     await p2.evaluate(() => { go("backup"); bkUndo(); bkUndo(); });
@@ -661,7 +762,7 @@ test("backup: dados ilegíveis no navegador são protegidos (nada é sobrescrito
   try {
     await p.evaluate(() => localStorage.setItem("mq_ord", "{corrompido"));
     await p.reload();
-    await p.waitForFunction(() => typeof render == "function");
+    await p.waitForFunction(() => window.MQ_READY === true);
     ok(/estão ilegíveis/.test(await txt(p)), "aviso de dados ilegíveis ausente");
     await p.evaluate(() => { NF = Object.assign(newNF(), { name: "X" }); addFarm(); });
     eq(await p.evaluate(() => localStorage.getItem("mq_ord")), "{corrompido", "dados originais foram sobrescritos");
