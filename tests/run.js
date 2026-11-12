@@ -102,6 +102,7 @@ const INVENTORY = {
   "Fazendas/visitas": ["home", "farm", "kpiv", "sector", "visit", "saveVisit", "newf", "addFarm"],
   "Etapa 2 – Equipamentos": ["eqv", "eqList", "eqForm", "eqSave", "eqDetail", "eqResumo", "eqMed", "eqCmp", "eqHist", "eqReport", "eqCompare", "eqRefs", "eqSchema", "evalDx", "estat", "epend", "refFor", "judge", "addPt", "e2dgSave", "eqTimeline"],
   "Etapa 3 – ISO Check": ["isov", "isoList", "isoForm", "isoSave", "isoDetail", "isoCompare", "isoCmpTable", "evalIso", "refLib", "isoDel", "isoSig", "isoAddPul"],
+  "Setor 4 – Testes técnicos": ["tt4", "ttTab", "ttForm", "ttSave", "ttDetail", "ttCompare", "ttAddRow", "ttFile", "lrStats", "ttDel"],
   "Offline / PWA": ["idbMirror", "bootOffline", "restoreFromIdb", "askPersist", "swRegister", "swUpdate", "offlineCard", "installCard", "netNotice"],
   "Etapa 1 – Central": ["sstat", "falerts", "fkpi", "kpiGrid", "tchart", "farmCard", "ficha", "farmDelView", "farmDelete", "farmCounts", "openEdit", "sideNav", "sectorStrip", "bottomNav", "render", "withFarm", "goTab"],
   "Dados/backup": ["ldS", "svS", "migrate", "initData", "drSnap", "drRestore", "buildFile", "bkExport", "bkCopy", "bkAnalyze", "bkApply", "bkUndo", "bkv", "hashHex"],
@@ -330,7 +331,7 @@ test("status: fazendas demo calculadas a partir dos registros DEMO, identificada
   const s = await open(), p = s.page;
   try {
     const m = await statOf(p, "modelo"), c = await statOf(p, "critica");
-    eq([m[3], c[3]], ["sd", "sd"], "setor 4 sem módulo deve ser Sem dados");
+    eq([m[3], c[3]], ["ok", "wa"], "setor 4 (leite residual DEMO: Modelo bom, Crítica atenção)");
     eq(c[7], "cr", "Fazenda Crítica com revisões atrasadas (registros DEMO)");
     await p.evaluate(() => go("farm", "critica"));
     const t = await txt(p);
@@ -384,7 +385,7 @@ test("migração v2 → v3: a meta de CCS do cadastro vira meta de qualidade; da
     });
     await p.reload(); await p.waitForFunction(() => window.MQ_READY === true);
     const r = await p.evaluate(() => ({ ver: DB.meta.ver, gl: DB.gl.u1, an: DB.an.length, mig: DB.meta.migrated.map(m => m.from + ">" + m.to), st: allStat(farms.find(f => f.id == "u1"))[4].st, lh: fkpi(farms.find(f => f.id == "u1")).find(k => k.lab == "Litros/hora").v }));
-    eq(r, { ver: 4, gl: { ccs: 200 }, an: 1, mig: ["1>2", "2>3", "3>4"], st: "wa", lh: null }, "migração");
+    eq(r, { ver: 5, gl: { ccs: 200 }, an: 1, mig: ["1>2", "2>3", "3>4", "4>5"], st: "wa", lh: null }, "migração");
     noErrors(s.errors);
   } finally { await s.close(); }
 });
@@ -642,6 +643,38 @@ test("iso: demonstração identificada; telas do Setor 3 sem rolagem lateral no 
   } finally { await s.close(); }
 });
 
+/* ===================== 3f. Setor 4: testes técnicos ===================== */
+test("testes técnicos: leite residual por vaca/quarto, estatística, referência verificada, testes de campo e relatórios externos", async () => {
+  const s = await open(), p = s.page;
+  try {
+    const fid = await mkFarm(p, { name: "Fazenda TT" });
+    await p.evaluate(() => { go("sector", V.f, 3); ttNew("lr"); TTF.lote = "L1";
+      [["10", "", "120"], ["11", "AD", "40"], ["11", "AE", "50"], ["12", "", "400"]].forEach(([a, q, v]) => { TTR = { a, q, v, u: "" }; ttAddRow(); });
+      TTR = { a: "10", q: "", v: "5", u: "" }; ttAddRow(); });
+    ok((await txt(p)).includes("já foi registrada"), "vaca/quarto repetido deveria ser recusado");
+    await p.evaluate(() => { TTR = { a: "13", q: "", v: "-3", u: "" }; ttAddRow(); });
+    ok((await txt(p)).includes("valor numérico válido"), "volume negativo deveria ser recusado");
+    await p.evaluate(() => ttSave());
+    let st = await p.evaluate(() => { const r = lrStats(DB.tt[0]); return [r.n, Math.round(r.mean), r.med, r.max, r.r, r.by["11"]]; });
+    eq(st, [3, 203, 120, 400, null, 90], "estatística (vaca 11 = soma dos quartos)");
+    eq(await p.evaluate(fid => sstat(farms.find(f => f.id == fid), 3).st, fid), "in", "sem referência: não avaliado");
+    await mkRf(p, { norma: "Outra", fab: "", par: "lr", max: "250", un: "mL", fonte: "Critério do técnico (teste)", ver: true });
+    st = await p.evaluate(() => { const r = lrStats(DB.tt[0]); return [r.out, Math.round(r.pct)]; });
+    eq(st, [1, 33], "vacas acima da referência");
+    eq(await p.evaluate(fid => sstat(farms.find(f => f.id == fid), 3).st, fid), "wa", "status com referência");
+    await p.evaluate(() => { V.t4 = DB.tt[0].id; V.t4v = "lr"; render(); });
+    ok((await txt(p)).includes("1 de 3 vaca(s) (33%) acima da referência verificada"), "detalhe do leite residual");
+    // testes de campo e relatórios externos com comparação
+    await p.evaluate(() => { ttNew("campo"); TTF.tit = "Fluxo"; TTR = { a: "Pico", v: "4,1", u: "kg/min" }; ttAddRow(); ttSave();
+      ["2026-09-01", "2026-11-01"].forEach((d, i) => { ttNew("ext"); TTF.date = d; TTF.tit = "Analisador"; TTR = { a: "Vácuo médio", v: String(46 + i), u: "kPa" }; ttAddRow(); ttSave(); });
+      V.t4 = null; V.t4v = "ext"; V.t4cmp = 1; render(); });
+    const t = await txt(p);
+    ok(t.includes("Comparar relatórios externos") && /Vácuo médio\s*46 kPa\s*47 kPa\s*\+1/.test(t), "comparação de relatórios: " + t.slice(0, 200));
+    eq(await p.evaluate(() => DB.tt.map(x => x.tipo)), ["lr", "campo", "ext", "ext"], "tipos salvos");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
 /* ===================== 3d. Offline-first: site publicado, modo avião, banco do aparelho ===================== */
 let SITE = null;
 function buildSiteOnce() {
@@ -763,7 +796,7 @@ test("backup: o backup de 11/11 é aceito pela tela de importação", async () =
     await p.waitForFunction(() => BK.rep);
     const t = await txt(p);
     for (const c of ["Formato MilkIQ reconhecido", "Integridade confirmada (sha256)", "Estrutura e identificadores válidos"]) ok(t.includes(c), "faltou: " + c);
-    if (APP === "index.html") ok(t.includes("Versão dos dados do arquivo: v2 (será atualizada para v4)"), "backup v2 deveria ser atualizado para v4");
+    if (APP === "index.html") ok(t.includes("Versão dos dados do arquivo: v2 (será atualizada para v5)"), "backup v2 deveria ser atualizado para v4");
     await p.click("text=Importar (adicionar novos)");
     ok(/Importação concluída e verificada/.test(await txt(p)), "importação não concluída");
     noErrors(s.errors);

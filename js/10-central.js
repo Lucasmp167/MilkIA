@@ -8,7 +8,7 @@
  */
 ST.sd = "Sem dados"; ST.in = "Registrado";
 const RANK = { cr: 4, wa: 3, ok: 2, in: 1, na: 1, sd: 0 };
-const TABKEY = { 1: "e2t", 2: "i3v", 4: "q", 5: "o", 6: "c", 7: "m8" }; // aba ativa de cada setor com abas
+const TABKEY = { 1: "e2t", 2: "i3v", 3: "t4v", 4: "q", 5: "o", 6: "c", 7: "m8" }; // aba ativa de cada setor com abas
 
 function withFarm(id, fn) { const old = V.f; V.f = id; try { return fn(); } finally { V.f = old; } }
 const fmtD = d => d ? String(d).slice(0, 10).split("-").reverse().join("/") : "—";
@@ -18,7 +18,7 @@ const realFarms = () => farms.filter(f => !f.demo), demoFarms = () => farms.filt
 const pos = v => typeof v == "number" && isFinite(v) && v > 0;
 
 /* Abre um setor já na aba certa (menos cliques). */
-function goTab(s, tab, fid, eid) { if (TABKEY[s] && tab) V[TABKEY[s]] = tab; if (s == 2) V.i3 = eid || null; else if (eid) { V.e2 = eid; V.me = eid; } else if (s == 1) V.e2 = null; V.e2edit = false; V.note = null; go("sector", fid || V.f, s); }
+function goTab(s, tab, fid, eid) { if (TABKEY[s] && tab) V[TABKEY[s]] = tab; if (s == 2) V.i3 = eid || null; else if (s == 3) V.t4 = eid || null; else if (eid) { V.e2 = eid; V.me = eid; } else if (s == 1) V.e2 = null; V.e2edit = false; V.note = null; go("sector", fid || V.f, s); }
 
 /* Série de um parâmetro de análise de leite: [{d, v}] em ordem de data. */
 function anSeries(k) { return QA().filter(x => x[k] != null && !isNaN(x[k])).map(x => ({ d: x.date, v: x[k] })); }
@@ -43,7 +43,12 @@ const SSTAT = [
     const ev = au.map(x => evalIso(x.a, x.e)), w = ev.reduce((a, s) => RANK[s.st] > RANK[a] ? s.st : a, "sd"), last = au.map(x => x.a.date).sort().pop();
     return { st: w == "sd" ? "na" : w, lab: w == "na" || w == "sd" ? "Sem referência" : undefined, t: `${au.length} equipamento(s) auditado(s) · última em ${fmtD(last)} · ${ev.reduce((a, x) => a + x.nf, 0)} ensaio(s) fora` };
   },
-  /* 4 Testes técnicos */ () => ({ st: "sd", t: "Módulo previsto: leite residual, testes de campo, PT6" }),
+  /* 4 Testes técnicos — último teste de leite residual */ () => {
+    const all = L("tt"); if (!all.length) return { st: "sd", t: "Nenhum teste técnico registrado" };
+    const lr = lastOf(all.filter(t => t.tipo == "lr")); if (!lr) return { st: "in", t: `${all.length} teste(s) · último ${fmtD(lastOf(all).date)}` };
+    const s = lrStats(lr), t = `Leite residual ${fmtD(lr.date)}: média ${fm(s.mean, 0)} mL · ${s.n} vaca(s)`;
+    return s.r ? { st: s.out ? "wa" : "ok", t: t + (s.out ? ` · ${s.out} acima da referência` : " · dentro da referência") } : { st: "in", lab: "Sem referência", t };
+  },
   /* 5 Qualidade */ f => {
     const a = QA(), ts = QT(); if (!a.length && !ts.length) return { st: "sd", t: "Nenhuma análise ou avaliação de tetos" };
     const g = gls(f), c = lastOf(anSeries("ccs")), b = lastOf(anSeries("cbt")), la = lastOf(a);
@@ -200,7 +205,7 @@ function home() {
     + `<div class="banner">Os dados ficam neste navegador e neste aparelho (sem sincronização). Faça backups em <b>Dados</b>. Esta versão não faz análise automática por IA.</div>`;
 }
 
-const QUICK = [["🥛", "Análise de leite", 4, "an"], ["⏱️", "Teste de ordenha", 5, "cro"], ["🧼", "Lavagem CIP", 6, "cy"], ["🛠️", "Manutenção", 7, "mt"], ["⚙️", "Medição de equipamento", 1, "med"], ["📏", "Auditoria ISO", 2, "form"]];
+const QUICK = [["🥛", "Análise de leite", 4, "an"], ["⏱️", "Teste de ordenha", 5, "cro"], ["🧼", "Lavagem CIP", 6, "cy"], ["🛠️", "Manutenção", 7, "mt"], ["⚙️", "Medição de equipamento", 1, "med"], ["📏", "Auditoria ISO", 2, "form"], ["🔧", "Leite residual", 3, "form"]];
 function farm() {
   const f = F(), ss = allStat(f), o = overall(ss);
   return `<div class="pagehead"><div style="min-width:0"><div class="crumb"><button onclick="go('home')">Fazendas</button></div><h1>${E(f.name)} ${f.demo ? '<span class="demo">DEMONSTRAÇÃO</span>' : ""}</h1><div class="mu">${E(f.producer)} · ${E(f.city)}</div></div><div class="acts">${badge(o)}<button class="btn s" onclick="go('sector','${f.id}',0)">Ficha${f.demo ? "" : " / editar"}</button></div></div>`
@@ -235,7 +240,7 @@ function kpiv() {
 
 /* Complementos das telas dos setores 2, 3 e 9 (ainda sem módulo próprio): mostram o que já existe. */
 const SEXTRA = {
-  8: f => `<h2>Relatórios disponíveis</h2><div class="ctr">${[[4, "🥛 Qualidade do leite"], [5, "⏱️ Otimização da ordenha"], [6, "🧼 Limpeza CIP"], [7, "🛠️ Manutenção"], [2, "📏 ISO Check"]].map(([s, l]) => { const st = sstat(f, s); return `<button class="sec" style="min-height:0" onclick="goTab(${s},'rl')"><b>${l}</b>${badge(st.st == "sd" ? st : { st: "in", lab: "Abrir relatório" })}</button>`; }).join("")}</div>`
+  8: f => `<h2>Relatórios disponíveis</h2><div class="ctr">${[[4, "🥛 Qualidade do leite"], [5, "⏱️ Otimização da ordenha"], [6, "🧼 Limpeza CIP"], [7, "🛠️ Manutenção"], [2, "📏 ISO Check"], [3, "🔧 Testes técnicos"]].map(([s, l]) => { const st = sstat(f, s); return `<button class="sec" style="min-height:0" onclick="goTab(${s},'rl')"><b>${l}</b>${badge(st.st == "sd" ? st : { st: "in", lab: "Abrir relatório" })}</button>`; }).join("")}</div>`
 };
 
 /* ---------- navegação: menu lateral (computador), faixa de setores e barra inferior (celular) ---------- */

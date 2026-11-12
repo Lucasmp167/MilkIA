@@ -40,7 +40,7 @@ const IT = Object.fromEntries(ISOT.map(t => [t[0], t]));
 const ISOG = { s: "Ensaios estáticos (sem ordenha)", p: "Pulsação (por pulsador)", d: "Ensaios dinâmicos (durante a ordenha)" };
 const NORMAS = ["ISO 5707", "ISO 6690", "GEA", "Outra"];
 /* parâmetros que a biblioteca aceita: os do Setor 2 (MP) + os ensaios ISO */
-const ALLPAR = () => MP.map(p => [p[0], p[1], p[2]]).concat(ISOT.map(t => [t[0], t[1], t[2]]));
+let ALLPAR = () => MP.map(p => [p[0], p[1], p[2]]).concat(ISOT.map(t => [t[0], t[1], t[2]]));
 const parName = k => { const p = ALLPAR().find(x => x[0] == k); return p ? p[1] : k; };
 
 /* Referência aplicável mais específica (substitui a versão do Setor 2: agora aceita norma para todas as marcas). */

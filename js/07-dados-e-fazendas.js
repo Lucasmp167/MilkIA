@@ -1,5 +1,5 @@
 /* ===== Etapa 1: segurança dos dados e estabilidade ===== */
-const DATA_VER=4,APP_BUILD="2.2-iso-2026-11-12",DEMO_IDS=["modelo","critica"];
+const DATA_VER=5,APP_BUILD="2.3-testes-2026-11-12",DEMO_IDS=["modelo","critica"];
 const ARR=["sessions","an","ts","ev","cy","pq","wa","eq","cmp","pl","sv","dx","pc","dg","rf","vs","farms"],MAP=["gl","ob","cr","rp","rm"];
 const LAB={sessions:"Testes de ordenha",an:"Análises de leite",ts:"Avaliações de tetos",ev:"Eventos",cy:"Lavagens CIP",pq:"Produtos químicos",wa:"Análises de água",eq:"Equipamentos",cmp:"Componentes",pl:"Itens de revisão",sv:"Serviços",dx:"Medições",pc:"Peças",dg:"Diagramas",rf:"Referências técnicas",vs:"Visitas",farms:"Fazendas",gl:"Metas de qualidade",ob:"Observações de qualidade",cr:"Referências de limpeza",rp:"Relatório de limpeza",rm:"Relatório de manutenção"};
 const ID=/^[A-Za-z0-9_-]{1,64}$/,clean=s=>String(s==null?"":s).replace(/[<>]/g,"").slice(0,120);
@@ -9,7 +9,9 @@ const MIGR={1:d=>{d.meta.ver=2;d.meta.migrated=(d.meta.migrated||[]).concat([{fr
  /* v3: a meta de CCS do cadastro da fazenda passa a ser a meta de qualidade (DB.gl), usada pelos painéis */
  2:d=>{(d.farms||[]).forEach(f=>{if(!f||!f.id||!(f.goalCcs>0))return;const g=d.gl[f.id]=d.gl[f.id]&&typeof d.gl[f.id]=="object"?d.gl[f.id]:{};if(g.ccs==null)g.ccs=f.goalCcs});d.meta.ver=3;d.meta.migrated=(d.meta.migrated||[]).concat([{from:2,to:3,at:new Date().toISOString()}]);return d},
  /* v4: coleção de auditorias ISO Check (DB.iso) */
- 3:d=>{if(!Array.isArray(d.iso))d.iso=[];d.meta.ver=4;d.meta.migrated=(d.meta.migrated||[]).concat([{from:3,to:4,at:new Date().toISOString()}]);return d}};
+ 3:d=>{if(!Array.isArray(d.iso))d.iso=[];d.meta.ver=4;d.meta.migrated=(d.meta.migrated||[]).concat([{from:3,to:4,at:new Date().toISOString()}]);return d},
+ /* v5: testes técnicos (DB.tt) */
+ 4:d=>{if(!Array.isArray(d.tt))d.tt=[];d.meta.ver=5;d.meta.migrated=(d.meta.migrated||[]).concat([{from:4,to:5,at:new Date().toISOString()}]);return d}};
 function migrate(d){ensureDB(d);let v=d.meta.ver||1;if(typeof v!="number"||v>DATA_VER)throw Error("dados de versão mais nova ("+v+") que este app (v"+DATA_VER+")");while(v<DATA_VER){d=MIGR[v](d);v++}d.meta.ver=DATA_VER;return d}
 const EQALL=()=>[...(DM.eq||[]),...DB.eq],fname=id=>(farms.find(f=>f.id==id)||{}).name||"—",hhmm=t=>new Date(t).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),stamp=()=>new Date().toISOString().slice(0,16).replace(/[-:T]/g,"").replace(/^(\d{8})(\d{4})$/,"$1-$2");
 function cleanFarm(f){if(!f||typeof f!="object"||!ID.test(f.id||""))return null;const n=x=>{const v=Number(x);return isFinite(v)&&v>=0?v:0},arr=a=>Array.isArray(a)?a.slice(0,60).map(Number).filter(x=>isFinite(x)):[];const t=(x,k)=>String(x==null?"":x).replace(/[<>]/g,"").slice(0,k);return{id:f.id,name:clean(f.name)||"Fazenda",producer:clean(f.producer)||"—",city:clean(f.city)||"—",phone:t(f.phone,40),email:t(f.email,120),addr:t(f.addr,200),obs:t(f.obs,3000),turns:n(f.turns),hoursSet:!!f.hoursSet,created:typeof f.created=="string"?f.created.slice(0,40):undefined,updated:typeof f.updated=="string"?f.updated.slice(0,40):undefined,demo:false,cows:n(f.cows),milking:n(f.milking),liters:n(f.liters),hours:n(f.hours)||6,ccs:arr(f.ccs),cbt:arr(f.cbt),prod:arr(f.prod),goalCcs:n(f.goalCcs)||200,st:Array.isArray(f.st)?f.st.slice(0,9).map(x=>["ok","wa","cr","na"].includes(x)?x:"na"):[],alerts:[],visits:[]}}
