@@ -175,3 +175,9 @@ nav .fab{min-width:74px;padding:10px 14px;margin-top:-26px;border:4px solid var(
 /* texto sobre a cor de destaque com contraste nos dois temas */
 .btn,nav .fab,.tb.on{color:var(--onpr)}.btn.s,.btn.gh,.hero .btn{color:revert-layer}.btn.s{color:var(--pr)}.btn.gh{color:var(--tx)}.hero .btn{color:var(--pr3)}.hero .btn.gh{color:#fff}.btn.dg{color:#fff}
 .fbar{padding:8px 10px}.fbar label{margin-top:8px}
+/* relatórios por setor e completo */
+.replist{display:flex;flex-direction:column;gap:8px}.repit{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:var(--card2)}
+.repsec{margin:6px 0}.rephead{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--mu);border-bottom:2px solid var(--pr);padding:4px 0;margin:14px 0 8px}.rephead b{color:var(--tx);font-size:14px}
+.pbreak{height:0;border-top:1px dashed var(--bd);margin:22px 0}
+@media print{.pbreak{break-before:page;border:0;margin:0}.repsec .card{box-shadow:none;border:0;padding:0}.rephead{border-color:#0f7a55}}
+@media print{.card.report,.repsec .card,.repsec .two,.repsec,details{break-inside:auto}.repsec .ov{overflow:visible}svg.chart{max-height:240px}}

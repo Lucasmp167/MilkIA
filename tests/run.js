@@ -111,6 +111,7 @@ const INVENTORY = {
   "Visita guiada e importação": ["gv", "gvStart", "gvSet", "gvFinish", "gvBar", "gvActive", "impCard", "impAnalyze", "impApply", "impFile", "csvRows", "impDate", "printHead"],
   "Cronômetro por fase, abas e relatório da fazenda": ["phToggle", "phReset", "phSaveCow", "phPanel", "phMeans", "gbar", "sectorStrip", "frel"],
   "Filtros e gráfico de linha": ["perBar", "withPeriod", "fpLim"],
+  "Relatórios em PDF": ["rall", "repHtml", "repOpen", "repPrint", "frelBody"],
   "Offline / PWA": ["idbMirror", "bootOffline", "restoreFromIdb", "askPersist", "swRegister", "swUpdate", "offlineCard", "installCard", "netNotice"],
   "Etapa 1 – Central": ["sstat", "falerts", "fkpi", "kpiGrid", "tchart", "farmCard", "ficha", "farmDelView", "farmDelete", "farmCounts", "openEdit", "sideNav", "sectorStrip", "bottomNav", "render", "withFarm", "goTab"],
   "Dados/backup": ["ldS", "svS", "migrate", "initData", "drSnap", "drRestore", "buildFile", "bkExport", "bkCopy", "bkAnalyze", "bkApply", "bkUndo", "bkv", "hashHex"],
@@ -986,6 +987,33 @@ test("gráficos antigos: linha com eixo e valores; filtro de período em Qualida
     eq(await p.evaluate(() => [DC.cy.length, DM.sv.length, DM.dx.length]), before, "listas restauradas após desenhar os gráficos");
     noErrors(s.errors);
   } finally { await s.close(); }
+});
+
+test("relatórios: um por setor e o completo (geral + todos os setores) em páginas separadas, prontos para PDF", async () => {
+  for (const viewport of [{ width: 390, height: 844 }, { width: 1366, height: 900 }]) {
+    const s = await open({ viewport }), p = s.page;
+    try {
+      await p.evaluate(() => { V.me = "x-sel"; go("frel", "critica"); });
+      ok((await txt(p)).includes("Relatórios em PDF") && (await p.$$(".repit")).length == 7, "central de relatórios com os 7 setores");
+      await p.evaluate(() => repOpen("q"));
+      let t = await txt(p);
+      eq(await p.evaluate(() => V.v), "rall", "abre o relatório do setor");
+      ok(t.includes("Relatório — Qualidade do leite") && t.includes("Salvar PDF"), "relatório de qualidade");
+      await p.evaluate(() => repOpen("all"));
+      t = await txt(p);
+      for (const w of ["Relatório da fazenda — Fazenda Crítica", "Qualidade do leite", "Ordenha e ordenhadores", "Equipamentos (diagnóstico por equipamento)", "ISO Check (última auditoria", "Testes técnicos (último", "Limpeza CIP e água", "Manutenção (por equipamento)", "DADOS DE DEMONSTRAÇÃO"]) ok(t.includes(w), "relatório completo sem: " + w);
+      ok((await p.$$(".pbreak")).length >= 7, "cada setor começa numa página nova");
+      eq(await p.evaluate(() => V.me), "x-sel", "o equipamento selecionado na tela não muda");
+      const rk = await p.evaluate(() => withFarm("critica", () => [rank(SS()).map(r => r.n + Math.round(r.sc)).join(), rank2(SS(), F()).map(r => r.n + Math.round(r.sc)).join()]));
+      eq(rk[0], rk[1], "o ranking dos relatórios antigos é o mesmo ranking ponderado");
+      if (viewport.width < 900) ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "sem rolagem lateral no celular");
+      // fazenda nova: relatórios sem registros, sem erro
+      const fid = await mkFarm(p, { name: "Fazenda Vazia Rel" });
+      await p.evaluate(fid => { V.rk = "all"; go("rall", fid); }, fid);
+      ok((await txt(p)).includes("Sem registros neste setor"), "setores sem registros");
+      noErrors(s.errors);
+    } finally { await s.close(); }
+  }
 });
 
 /* ===================== 3d. Offline-first: site publicado, modo avião, banco do aparelho ===================== */

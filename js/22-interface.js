@@ -8,7 +8,7 @@
  *  - Formulário de análise recolhido num botão grande (abre direto vindo do "＋ Registrar").
  */
 const SCOL = ["#5b6b8c", "#3b6fb6", "#7a55b5", "#b5651d", "#0f7a55", "#c0392b", "#1b8a9c", "#8a6d1e", "#4f6b3a"]; // cor de cada setor (ícone)
-const inFarm = () => ["sector", "farm", "kpi", "frel", "gv"].includes(V.v);
+const inFarm = () => ["sector", "farm", "kpi", "frel", "gv", "rall"].includes(V.v);
 
 /* barra superior da fazenda (celular e computador) */
 function appBar() {
@@ -27,7 +27,7 @@ function tidy(html) {
 }
 render = function () {
   if (!farms.some(x => x.id == V.f)) V.f = (realFarms()[0] || farms[0]).id;
-  const m = { home, farm, kpi: kpiv, sector, visit, new: newf, backup: bkv, fdel: farmDelView, gv, frel };
+  const m = { home, farm, kpi: kpiv, sector, visit, new: newf, backup: bkv, fdel: farmDelView, gv, frel, rall: typeof rall == "function" ? rall : frel };
   if (V.v == "backup" && !IDBS.est && typeof storageInfo == "function") storageInfo().then(() => { if (V.v == "backup") render(); });
   const app = $("app"); app.classList.toggle("infarm", inFarm());
   app.innerHTML = printHead() + (inFarm() ? appBar() : "") + statusBar() + tidy((m[V.v] || home)()) + sheet();
