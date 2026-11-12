@@ -67,6 +67,7 @@ js/13-offline.js  IndexedDB, conexão, instalação e atualização
 js/14-iso.js      Setor 3: ISO Check e biblioteca de referências
 js/15-testes.js   Setor 4: leite residual, testes de campo, relatórios externos
 js/16-relatorios.js Setor 9: relatório da visita e plano de ação
+js/17-ordenha.js  Setor 6 v2: turnos, ordenhadores, ranking, diagnóstico, assistente técnico
 legacy/           cópia original congelada (não editar) + SHA256SUMS
 tests/run.js      testes automatizados
 *.json            backup de 11/11 (usado como teste)
@@ -90,7 +91,7 @@ Cada fazenda tem sua Central, com indicadores, alertas e os 9 setores. O status 
 | 3 | ISO Check | **Funcional**: auditorias por equipamento (ensaios estáticos, por pulsador e dinâmicos), avaliação só por referência verificada, problemas com causas e ações, comparação com a auditoria anterior, relatório com assinatura; **biblioteca de referências** ISO 5707 / ISO 6690 / GEA / outras, com fonte, item e status de verificação (o app não traz valores normativos) |
 | 4 | Testes técnicos | **Funcional**: leite residual por vaca/quarto (média, mediana, máximo, % acima da referência verificada, evolução), testes de campo livres, relatórios externos (ex.: analisador) com arquivo anexado e comparação entre datas |
 | 5 | Qualidade do leite | **Funcional**: análises, evolução, antes/depois, tetos (escore manual, sem IA), indicadores/metas, relatório |
-| 6 | Otimização da ordenha | **Funcional**: cronômetro, comparação entre ordenhas, ranking, gráficos, histórico, relatório, calculadoras |
+| 6 | Ordenha e ordenhadores | **Funcional**: cronômetro por vaca (8 marcos, com pós-dipping), turnos Manhã/Tarde/Noite, equipe, início/término (duração automática), cadastro único de ordenhadores; painel por turno (produção, vacas/h, tempo por vaca, preparo, sobreordenha, evolução diária/semanal/mensal, CCS por turno); ranking ponderado que não premia só velocidade; comparação do mesmo ordenhador em dois períodos e entre equipes; diagnóstico de gargalos (fatos, hipóteses, recomendações, prioridade, estimativa de ganho) com metas definidas pelo usuário; plano de melhoria com indicador acompanhado |
 | 7 | Limpeza CIP e químicos | **Funcional**: lavagens, produtos/estoque, água, gráficos, antes/depois, relatório |
 | 8 | Manutenção preventiva | **Funcional**: equipamentos, revisões, serviços, peças, diagramas, diagnóstico, relatório |
 | 9 | Documentos e relatórios | **Funcional**: relatório consolidado da visita (período ou visita, indicadores, alertas, registros de todos os setores, plano de ação, considerações, assinaturas), plano de ação com responsável/prazo/situação (criado a partir dos alertas; atrasos viram alerta), atalhos para os relatórios de cada setor |
