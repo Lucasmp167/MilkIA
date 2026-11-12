@@ -16,6 +16,7 @@ concurrency:
 jobs:
   publicar:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -55,16 +56,17 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh api "repos/${{ github.repository }}/pages" >/dev/null 2>&1 && echo "Pages já ativo" && exit 0
+          gh api "repos/${{ github.repository }}/pages" && echo "Pages já ativo" && exit 0
           gh api -X POST "repos/${{ github.repository }}/pages" -f "source[branch]=gh-pages" -f "source[path]=/" && echo "Pages ativado" || echo "::warning::Não foi possível ativar o Pages automaticamente. Ative em Settings → Pages → Branch: gh-pages / (root)."
       - name: Conferir o site publicado
         continue-on-error: true
+        timeout-minutes: 8
         run: |
           OWNER=$(echo "${{ github.repository_owner }}" | tr 'A-Z' 'a-z'); REPO="${{ github.event.repository.name }}"
           URL="https://$OWNER.github.io/$REPO"
           for i in $(seq 1 30); do
-            V=$(curl -fsS "$URL/version.json" 2>/dev/null | grep -o '"commit": "[^"]*"' || true)
-            T=$(curl -fsS "$URL/teste/version.json" 2>/dev/null | grep -o '"commit": "[^"]*"' || true)
+            V=$(curl -fsS --max-time 10 "$URL/version.json?t=$i" 2>/dev/null | grep -o '"commit": "[^"]*"' || true)
+            T=$(curl -fsS --max-time 10 "$URL/teste/version.json?t=$i" 2>/dev/null | grep -o '"commit": "[^"]*"' || true)
             echo "tentativa $i · estável: ${V:-indisponível} · testes: ${T:-indisponível}"
             if echo "$T" | grep -q "$GITHUB_SHA"; then echo "SITE OK: $URL/ e $URL/teste/"; exit 0; fi
             sleep 20
