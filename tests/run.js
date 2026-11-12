@@ -104,6 +104,7 @@ const INVENTORY = {
   "Etapa 3 – ISO Check": ["isov", "isoList", "isoForm", "isoSave", "isoDetail", "isoCompare", "isoCmpTable", "evalIso", "refLib", "isoDel", "isoSig", "isoAddPul"],
   "Setor 4 – Testes técnicos": ["tt4", "ttTab", "ttForm", "ttSave", "ttDetail", "ttCompare", "ttAddRow", "ttFile", "lrStats", "ttDel"],
   "Setor 9 – Relatórios": ["r9", "visReport", "paView", "paSave", "paSet", "paFromAlert", "secReports", "rset9"],
+  "Ordenha v2 – turnos e ordenhadores": ["vTurnos", "vOps", "vDiag", "rank2", "met", "routineFindings", "opSave", "opFill", "opList", "colChart", "mchart", "assist", "assistCard", "producerSummary", "paFromFinding", "paKpi", "qualByTurn", "rotSet"],
   "Offline / PWA": ["idbMirror", "bootOffline", "restoreFromIdb", "askPersist", "swRegister", "swUpdate", "offlineCard", "installCard", "netNotice"],
   "Etapa 1 – Central": ["sstat", "falerts", "fkpi", "kpiGrid", "tchart", "farmCard", "ficha", "farmDelView", "farmDelete", "farmCounts", "openEdit", "sideNav", "sectorStrip", "bottomNav", "render", "withFarm", "goTab"],
   "Dados/backup": ["ldS", "svS", "migrate", "initData", "drSnap", "drRestore", "buildFile", "bkExport", "bkCopy", "bkAnalyze", "bkApply", "bkUndo", "bkv", "hashHex"],
@@ -386,7 +387,7 @@ test("migração v2 → v3: a meta de CCS do cadastro vira meta de qualidade; da
     });
     await p.reload(); await p.waitForFunction(() => window.MQ_READY === true);
     const r = await p.evaluate(() => ({ ver: DB.meta.ver, gl: DB.gl.u1, an: DB.an.length, mig: DB.meta.migrated.map(m => m.from + ">" + m.to), st: allStat(farms.find(f => f.id == "u1"))[4].st, lh: fkpi(farms.find(f => f.id == "u1")).find(k => k.lab == "Litros/hora").v }));
-    eq(r, { ver: 6, gl: { ccs: 200 }, an: 1, mig: ["1>2", "2>3", "3>4", "4>5", "5>6"], st: "wa", lh: null }, "migração");
+    eq(r, { ver: 7, gl: { ccs: 200 }, an: 1, mig: ["1>2", "2>3", "3>4", "4>5", "5>6", "6>7"], st: "wa", lh: null }, "migração");
     noErrors(s.errors);
   } finally { await s.close(); }
 });
@@ -722,6 +723,82 @@ test("backup: observações do relatório de qualidade (texto) não impedem a im
   } finally { await s2.close(); }
 });
 
+/* ===================== 3h. Ordenha v2: turnos, ordenhadores, ranking, diagnóstico, assistente ===================== */
+/* cria um teste de ordenha com vacas de tempos definidos (m = marcos em segundos) */
+const mkSess = (p, fid, o, cows) => p.evaluate(([fid, o, cows]) => { go("sector", fid, 5); V.o = "cro"; delete DB.drafts[fid]; const d = dr(); Object.assign(d, o); d.cows = cows.map((m, i) => ({ n: String(i + 1), m })); ssave(); }, [fid, o, cows]);
+const fullCow = (pa, so, ct = 30) => ({ jatos: 0, pre: 5, sec: 5 + ct, est: 6 + ct, col: pa, fim: pa + 300, ret: pa + 300 + so, pos: pa + 310 + so });
+const fastCow = (pa, so) => ({ jatos: 0, est: 2, col: pa, fim: pa + 300, ret: pa + 300 + so });
+
+test("ordenha: turnos, equipe, horário com duração automática, pós-dipping e cadastro único de ordenhadores", async () => {
+  const s = await open(), p = s.page;
+  try {
+    const fid = await mkFarm(p, { name: "Fazenda Ord" });
+    await p.evaluate(fid => { go("sector", fid, 5); V.o = "opr"; render(); OPF = { nome: "Ana", equipe: "Equipe Sol", obs: "" }; opSave(); OPF = { nome: " ana ", equipe: "", obs: "" }; opSave(); }, fid);
+    ok((await txt(p)).includes("Já existe um ordenhador"), "nome repetido deveria ser recusado");
+    await p.evaluate(fid => { V.o = "cro"; render(); dset("milker", "Ana"); opFill("Ana"); dset("hi", "22:30"); dset("hf", "01:10"); dset("turn", "3"); }, fid);
+    eq(await p.evaluate(() => [dr().equipe, dr().dur]), ["Equipe Sol", 160], "equipe sugerida e duração atravessando a meia-noite");
+    ok(await p.$eval("#dl-ops", d => [...d.options].some(o => o.value == "Ana")), "sugestão de ordenhador no formulário");
+    await p.evaluate(() => { dset("litros", "800"); dset("vacas", "40"); T.n = "12"; T.m = { jatos: 0, pre: 4, sec: 34, col: 70, fim: 370, ret: 395, pos: 403 }; T.done = true; tsave(); ssave(); });
+    const r = await p.evaluate(() => { const ss = SS(), c = cd(ss[0].cows[0]); return [ss.length, TURNO[ss[0].turn], ss[0].hi, ss[0].hf, c.rp, c.fl, c.so, met(ss).vph]; });
+    eq(r, [1, "Noite", "22:30", "01:10", 8, 300, 25, 15], "teste salvo");
+    await p.evaluate(() => { V.o = "hi"; render(); });
+    ok((await txt(p)).includes("Noite · Ana (Equipe Sol)"), "histórico com turno e equipe");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
+test("ordenha: ranking valoriza rotina e metas, não só velocidade; diagnóstico e plano de melhoria com indicador", async () => {
+  const s = await open(), p = s.page;
+  try {
+    const fid = await mkFarm(p, { name: "Fazenda Rank", milking: "100", turns: "2" });
+    for (let i = 0; i < 3; i++) {
+      await mkSess(p, fid, { date: "2026-11-0" + (i + 1), turn: 1, milker: "Rápido", litros: "1000", vacas: "50", dur: "60" }, [fastCow(20, 90), fastCow(25, 80), fastCow(18, 100)]);
+      await mkSess(p, fid, { date: "2026-11-0" + (i + 1), turn: 2, milker: "Cuidadoso", litros: "1000", vacas: "50", dur: "90" }, [fullCow(90, 10), fullCow(100, 15), fullCow(95, 5)]);
+    }
+    let R = await p.evaluate(fid => rank2(SS(), farms.find(f => f.id == fid)).map(r => [r.n, Math.round(r.sc)]), fid);
+    eq(R.map(x => x[0]), ["Cuidadoso", "Rápido"], "sem metas: rotina completa já supera velocidade");
+    // sem metas o diagnóstico não classifica sobreordenha; com meta, classifica
+    let F2 = await p.evaluate(fid => routineFindings(SS(), farms.find(f => f.id == fid)).map(x => x.fato), fid);
+    ok(!F2.some(t => t.includes("sobreordenha acima do limite")), "sem meta não pode haver limite de sobreordenha");
+    ok(F2.some(t => t.includes("sem pré-dipping registrado")), "falta de pré-dipping deveria aparecer: " + F2);
+    await p.evaluate(() => { rotSet("soMax", "30"); rotSet("paMin", "60"); rotSet("paMax", "120"); rotSet("fonte", "Protocolo da fazenda (teste)"); flushAll(); });
+    R = await p.evaluate(fid => rank2(SS(), farms.find(f => f.id == fid)).map(r => [r.n, Math.round(r.sc), r.used.length]), fid);
+    eq(R.map(x => x[0]), ["Cuidadoso", "Rápido"], "com metas");
+    ok(R[0][1] - R[1][1] >= 40, "diferença de pontuação deveria ser grande: " + JSON.stringify(R));
+    F2 = await p.evaluate(fid => routineFindings(SS(), farms.find(f => f.id == fid)), fid);
+    const so = F2.find(x => x.fato.includes("sobreordenha acima do limite de 30 s"));
+    ok(so && so.hip && so.rec && so.kpi.k == "so", "achado de sobreordenha com fato, hipótese, recomendação e indicador");
+    ok(F2.some(x => x.fato.startsWith("Estimativa: reduzir a sobreordenha")), "estimativa de ganho (rebanho cadastrado e ≥3 testes)");
+    ok(F2.some(x => /Diferença de \d+% em .* entre turnos/.test(x.fato)), "diferença entre turnos");
+    // criar ação a partir do achado e acompanhar o indicador
+    await p.evaluate(fid => { V.o = "dia"; go("sector", fid, 5); const i = LASTF.findIndex(x => x.kpi && x.kpi.k == "so"); paFromFinding(i); PAF.resp = "Gerente"; paSave(); }, fid);
+    const a = await p.evaluate(() => [DB.pa[0].pri, DB.pa[0].kpi, DB.pa[0].s, DB.pa[0].resp]);
+    eq(a, ["Alta", "so", "5", "Gerente"], "ação criada do diagnóstico");
+    ok((await txt(p)).includes("Indicador: Sobreordenha · antes"), "acompanhamento do indicador no plano");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
+test("assistente técnico: fatos, hipóteses e recomendações na Central e resumo para o produtor no relatório", async () => {
+  const s = await open(), p = s.page;
+  try {
+    const fid = await mkFarm(p, { name: "Fazenda Assist", goal: "300" });
+    for (const [d, c] of [["2026-08-01", "200"], ["2026-08-15", "210"], ["2026-09-01", "205"], ["2026-09-15", "320"], ["2026-10-01", "350"], ["2026-10-15", "380"]]) await addAn(p, fid, { date: d, ccs: c, turno: "1" });
+    const X = await p.evaluate(fid => assist(farms.find(f => f.id == fid)), fid);
+    const t = X.find(x => x.fato.startsWith("CCS subiu"));
+    ok(t && t.hip && t.rec && t.pri == "Alta", "tendência de CCS: " + JSON.stringify(X.map(x => x.fato)));
+    await p.evaluate(fid => go("farm", fid), fid);
+    let tx = await txt(p);
+    ok(tx.includes("Assistente técnico") && tx.includes("análise automática por regras") && tx.includes("Hipótese:"), "cartão do assistente");
+    ok(!/inteligência artificial|IA generativa detectou/i.test(tx.replace("sem IA generativa", "")), "não pode se apresentar como IA");
+    await p.evaluate(fid => { V.r9v = "vis"; go("sector", fid, 8); }, fid);
+    tx = await txt(p);
+    ok(tx.includes("Resumo para o produtor") && tx.includes("Precisa de atenção") && tx.includes("Análise técnica (fatos, hipóteses e recomendações)"), "relatório da visita");
+    eq(await p.evaluate(fid => { const q = qualByTurn(farms.find(f => f.id == fid)); return q && q[1] && q[1].n; }, fid), 6, "qualidade por turno a partir das análises com turno");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
 /* ===================== 3d. Offline-first: site publicado, modo avião, banco do aparelho ===================== */
 let SITE = null;
 function buildSiteOnce() {
@@ -843,7 +920,7 @@ test("backup: o backup de 11/11 é aceito pela tela de importação", async () =
     await p.waitForFunction(() => BK.rep);
     const t = await txt(p);
     for (const c of ["Formato MilkIQ reconhecido", "Integridade confirmada (sha256)", "Estrutura e identificadores válidos"]) ok(t.includes(c), "faltou: " + c);
-    if (APP === "index.html") ok(t.includes("Versão dos dados do arquivo: v2 (será atualizada para v6)"), "backup v2 deveria ser atualizado para v4");
+    if (APP === "index.html") ok(t.includes("Versão dos dados do arquivo: v2 (será atualizada para v7)"), "backup v2 deveria ser atualizado para v4");
     await p.click("text=Importar (adicionar novos)");
     ok(/Importação concluída e verificada/.test(await txt(p)), "importação não concluída");
     noErrors(s.errors);

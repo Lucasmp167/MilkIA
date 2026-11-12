@@ -60,7 +60,7 @@ const SSTAT = [
   },
   /* 6 Ordenha */ () => {
     const ss = SS(); if (!ss.length) return { st: "sd", t: "Nenhum teste de ordenha cronometrado" };
-    const l = lastOf(ss); return { st: "in", t: `${ss.length} teste(s) · último ${fmtD(l.date)}, ${l.turn}ª ordenha` };
+    const l = lastOf(ss); return { st: "in", t: `${ss.length} teste(s) · último ${fmtD(l.date)}, turno ${TURNO[l.turn] || "—"}` };
   },
   /* 7 CIP */ f => {
     const cy = CYS(), wa = WAS(), P = PRODS(); if (!cy.length && !wa.length && !P.length) return { st: "sd", t: "Nenhuma lavagem, produto ou análise de água" };
@@ -215,6 +215,7 @@ function farm() {
     + farmSwitch(f) + demoNote(f)
     + `<div class="quick noprint">${QUICK.map(q => `<button onclick="goTab(${q[2]},'${q[3]}')">＋ ${q[0]} ${q[1]}</button>`).join("")}<button onclick="VF=Object.assign(newVF(),{fid:'${f.id}'});VE=null;go('visit')">＋ 📝 Visita</button></div>`
     + `<h2>Indicadores</h2>${kpiGrid(fkpi(f).slice(0, 8))}<p class="mu"><button class="btn s" onclick="go('kpi','${f.id}')">📊 Ver gráficos e todos os indicadores</button></p>`
+    + (typeof assistCard == "function" ? assistCard(f, 4) : "")
     + `<h2>Alertas</h2>${alertList(f, 5)}`
     + `<h2>Central da Fazenda</h2><div class="sgrid">${SECT.map((s, i) => `<button class="sec" onclick="go('sector','${f.id}',${i})"><span class="ic">${s[0]}</span><b>${i + 1}. ${s[1]}</b>${badge(ss[i])}<span class="mu">${E(ss[i].t)}</span></button>`).join("")}</div>`;
 }
