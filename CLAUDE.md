@@ -11,3 +11,6 @@
 - O backup precisa continuar compatível com `format:"milkiq-backup", formatVer:1`.
 - Antes de dar uma mudança por concluída, rode `npm test`: os testes abrem a página no Chromium e conferem se o console fica sem erros. Ao criar uma tela, função ou setor, inclua-o em `INVENTORY` e nos fluxos de `tests/run.js`.
 - Nunca edite `legacy/`, que é a cópia congelada do original e é conferida por hash.
+- Telas novas não podem mostrar números fixos ou fictícios. Indicadores, status e alertas vêm de `fkpi`, `sstat` e `falerts` (em `js/10-central.js`); sem registro, a tela mostra "Sem dados". Um status só pode ser Bom, Atenção ou Crítico se existir um critério (meta do usuário, faixa cadastrada ou referência verificada).
+- Funções antigas (`QA`, `SS`, `L`, `CYS`, `cls`, `planSt`...) leem a fazenda em `V.f`. Para calcular outra fazenda, use `withFarm(id, fn)`.
+- `sector(1)` (com argumento) devolve a tela "placeholder" com as calculadoras; o Setor 6 usa isso na aba Calculadoras.

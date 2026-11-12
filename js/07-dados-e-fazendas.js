@@ -1,14 +1,16 @@
 /* ===== Etapa 1: segurança dos dados e estabilidade ===== */
-const DATA_VER=2,APP_BUILD="etapa1-2026-11-11",DEMO_IDS=["modelo","critica"];
+const DATA_VER=3,APP_BUILD="etapa1b-2026-11-12",DEMO_IDS=["modelo","critica"];
 const ARR=["sessions","an","ts","ev","cy","pq","wa","eq","cmp","pl","sv","dx","pc","dg","rf","vs","farms"],MAP=["gl","ob","cr","rp","rm"];
 const LAB={sessions:"Testes de ordenha",an:"Análises de leite",ts:"Avaliações de tetos",ev:"Eventos",cy:"Lavagens CIP",pq:"Produtos químicos",wa:"Análises de água",eq:"Equipamentos",cmp:"Componentes",pl:"Itens de revisão",sv:"Serviços",dx:"Medições",pc:"Peças",dg:"Diagramas",rf:"Referências técnicas",vs:"Visitas",farms:"Fazendas",gl:"Metas de qualidade",ob:"Observações de qualidade",cr:"Referências de limpeza",rp:"Relatório de limpeza",rm:"Relatório de manutenção"};
 const ID=/^[A-Za-z0-9_-]{1,64}$/,clean=s=>String(s==null?"":s).replace(/[<>]/g,"").slice(0,120);
 let svT=null,dsT=null,drT=null,DRP=false,DRERR=null,DRBAD=false,DRLEN=0,MIGERR=null,RECOV=[],LASTDR={},DRS={ver:1,items:{}};
 function ensureDB(d){ARR.forEach(k=>{if(!Array.isArray(d[k]))d[k]=[]});MAP.concat(["drafts"]).forEach(k=>{if(!d[k]||typeof d[k]!="object"||Array.isArray(d[k]))d[k]={}});if(!d.meta||typeof d.meta!="object"||Array.isArray(d.meta))d.meta={};return d}
-const MIGR={1:d=>{d.meta.ver=2;d.meta.migrated=(d.meta.migrated||[]).concat([{from:1,to:2,at:new Date().toISOString()}]);return d}};
+const MIGR={1:d=>{d.meta.ver=2;d.meta.migrated=(d.meta.migrated||[]).concat([{from:1,to:2,at:new Date().toISOString()}]);return d},
+ /* v3: a meta de CCS do cadastro da fazenda passa a ser a meta de qualidade (DB.gl), usada pelos painéis */
+ 2:d=>{(d.farms||[]).forEach(f=>{if(!f||!f.id||!(f.goalCcs>0))return;const g=d.gl[f.id]=d.gl[f.id]&&typeof d.gl[f.id]=="object"?d.gl[f.id]:{};if(g.ccs==null)g.ccs=f.goalCcs});d.meta.ver=3;d.meta.migrated=(d.meta.migrated||[]).concat([{from:2,to:3,at:new Date().toISOString()}]);return d}};
 function migrate(d){ensureDB(d);let v=d.meta.ver||1;if(typeof v!="number"||v>DATA_VER)throw Error("dados de versão mais nova ("+v+") que este app (v"+DATA_VER+")");while(v<DATA_VER){d=MIGR[v](d);v++}d.meta.ver=DATA_VER;return d}
 const EQALL=()=>[...(DM.eq||[]),...DB.eq],fname=id=>(farms.find(f=>f.id==id)||{}).name||"—",hhmm=t=>new Date(t).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),stamp=()=>new Date().toISOString().slice(0,16).replace(/[-:T]/g,"").replace(/^(\d{8})(\d{4})$/,"$1-$2");
-function cleanFarm(f){if(!f||typeof f!="object"||!ID.test(f.id||""))return null;const n=x=>{const v=Number(x);return isFinite(v)&&v>=0?v:0},arr=a=>Array.isArray(a)?a.slice(0,60).map(Number).filter(x=>isFinite(x)):[];return{id:f.id,name:clean(f.name)||"Fazenda",producer:clean(f.producer)||"—",city:clean(f.city)||"—",demo:false,cows:n(f.cows),milking:n(f.milking),liters:n(f.liters),hours:n(f.hours)||6,ccs:arr(f.ccs),cbt:arr(f.cbt),prod:arr(f.prod),goalCcs:n(f.goalCcs)||200,st:Array.isArray(f.st)?f.st.slice(0,9).map(x=>["ok","wa","cr","na"].includes(x)?x:"na"):[],alerts:[],visits:[]}}
+function cleanFarm(f){if(!f||typeof f!="object"||!ID.test(f.id||""))return null;const n=x=>{const v=Number(x);return isFinite(v)&&v>=0?v:0},arr=a=>Array.isArray(a)?a.slice(0,60).map(Number).filter(x=>isFinite(x)):[];const t=(x,k)=>String(x==null?"":x).replace(/[<>]/g,"").slice(0,k);return{id:f.id,name:clean(f.name)||"Fazenda",producer:clean(f.producer)||"—",city:clean(f.city)||"—",phone:t(f.phone,40),email:t(f.email,120),addr:t(f.addr,200),obs:t(f.obs,3000),turns:n(f.turns),hoursSet:!!f.hoursSet,created:typeof f.created=="string"?f.created.slice(0,40):undefined,updated:typeof f.updated=="string"?f.updated.slice(0,40):undefined,demo:false,cows:n(f.cows),milking:n(f.milking),liters:n(f.liters),hours:n(f.hours)||6,ccs:arr(f.ccs),cbt:arr(f.cbt),prod:arr(f.prod),goalCcs:n(f.goalCcs)||200,st:Array.isArray(f.st)?f.st.slice(0,9).map(x=>["ok","wa","cr","na"].includes(x)?x:"na"):[],alerts:[],visits:[]}}
 /* inicialização, migração de versão e fazendas */
 function initData(){try{localStorage.removeItem("mq_probe")}catch(e){}
  if(CORRUPT!==null){ensureDB(DB);return}
@@ -33,7 +35,7 @@ const DRF=[
 {k:"wa",l:"Análise de água (Setor 7)",s:6,tv:"c",tab:"wa",get:()=>({w:WF,id:WE}),fresh:()=>({w:newWF(),id:null}),set:v=>{WF=Object.assign(newWF(),v.w);WE=DB.wa.some(x=>x.id==v.id)?v.id:null}},
 {k:"tm",l:"Cronômetro da vaca (Setor 6)",s:5,tv:"o",tab:"cro",get:()=>({n:T.n,acc:el(),m:T.m,done:T.done,was:T.run}),fresh:()=>({n:"",acc:0,m:{},done:false,was:false}),set:v=>{T.run=false;T.acc=+v.acc||0;T.m=v.m&&typeof v.m=="object"?v.m:{};T.done=!!v.done;T.n=String(v.n||"")}},
 {k:"vs",l:"Visita",view:"visit",get:()=>({v:VF,id:VE}),fresh:()=>({v:newVF(),id:null}),set:v=>{VF=Object.assign(newVF(),v.v);VE=DB.vs.some(x=>x.id==v.id)?v.id:null}},
-{k:"nf",l:"Cadastro de fazenda",view:"new",get:()=>({n:NF}),fresh:()=>({n:newNF()}),set:v=>{NF=Object.assign(newNF(),v.n)}}];
+{k:"nf",l:"Cadastro de fazenda",view:"new",get:()=>({n:NF,id:NFE}),fresh:()=>({n:newNF(),id:null}),set:v=>{NF=Object.assign(newNF(),v.n);NFE=DB.farms.some(x=>x.id==v.id)?v.id:null}}];
 E8.forEach(k=>DRF.push({k:"s8"+k,l:L8[k]+" (Setor 8)",s:7,tv:"m8",tab:T8[k],
  get:()=>{const o={f:FS[k],id:FE[k]};if(k=="sv"){o.np=NP;o.pb=PB;o.pa=PA}if(k=="pc")o.pp=PP;if(k=="dg")o.pg=PG;return o},
  fresh:()=>{const o={f:NEW[k](),id:null};if(k=="sv"){o.np={n:"",q:"",c:""};o.pb=[];o.pa=[]}if(k=="pc")o.pp=[];if(k=="dg")o.pg=[];return o},
@@ -55,20 +57,14 @@ function flushAll(){svFlush();drSnap();drFlush()}
 /* ===== visitas ===== */
 const VT=["Rotina de ordenha","ISO Check","Qualidade do leite","Manutenção","Limpeza CIP","Outra"];
 function newVF(){return{fid:"",tipo:VT[0],date:TD(),notas:""}}
-function newNF(){return{name:"",producer:"",city:"",cows:"",milking:"",goal:"200"}}
-let VF=newVF(),VE=null,NF=newNF();
+let VF=newVF(),VE=null,NF=null; /* NF/newNF: js/11-fazendas.js */
 function visit(){const f=F(),fid=VF.fid||f.id,vs=DB.vs.filter(v=>v.fid==fid).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:0);
 return head("Nova visita","Registro rápido")+`<div class="card"><b>${VE?"Editar visita":"Nova visita"}</b><label>Fazenda</label><select onchange="VF.fid=this.value;render()">${farms.map(x=>`<option value="${x.id}" ${x.id==fid?"selected":""}>${E(x.name)}</option>`).join("")}</select><label>Tipo</label><select onchange="VF.tipo=this.value">${VT.map(t=>`<option ${VF.tipo==t?"selected":""}>${t}</option>`).join("")}</select><label>Data</label><input type="date" value="${E(VF.date)}" oninput="VF.date=this.value"><label>Observações</label><textarea rows="3" oninput="VF.notas=this.value">${E(VF.notas)}</textarea><br><br><button class="btn" onclick="saveVisit()">${VE?"Salvar alterações":"Salvar visita"}</button>${VE?'<br><br><button class="btn s" onclick="VE=null;VF=newVF();render()">Cancelar edição</button>':""}</div><h2>Visitas — ${E(fname(fid))} (${vs.length})</h2>`+(vs.length?vs.map(v=>`<div class="card"><div class="top"><b>${E(v.date)} · ${E(v.tipo)}</b><span><button class="btn s" onclick="vedit('${v.id}')">Editar</button> <button class="btn s" onclick="qdel('vs','${v.id}')">${V.del==v.id?"Confirmar":"Excluir"}</button></span></div><p class="mu">${E(v.notas)||"Sem observações"}</p></div>`).join(""):'<p class="mu">Nenhuma visita registrada nesta fazenda.</p>')}
 function vedit(id){const v=DB.vs.find(x=>x.id==id);if(!v)return;VF=cp(v);VE=id;render();scrollTo(0,0)}
 function saveVisit(){const v=cp(VF);if(!v.fid)v.fid=V.f;if(!farms.some(f=>f.id==v.fid))return note("Fazenda inválida.");if(!v.date)return note("Informe a data da visita.");if(String(v.notas).length>5000)return note("Observações muito longas (máx. 5000 caracteres).");
  const old=VE?DB.vs.find(x=>x.id==VE):null;v.id=VE||"v"+Date.now();v.demo=false;v.created=old&&old.created||Date.now();
  if(upsert("vs",v)){VF=newVF();VE=null;V.f=v.fid;note("Visita salva e conferida no armazenamento do navegador.",1)}else note(FAIL)}
-/* ===== cadastro de fazendas ===== */
-function newf(){return`<button class="btn s" onclick="go('home')">← Voltar</button>`+head("Cadastrar fazenda")+`<div class="card"><label>Nome da fazenda</label><input value="${E(NF.name)}" oninput="NF.name=this.value"><label>Produtor</label><input value="${E(NF.producer)}" oninput="NF.producer=this.value"><label>Cidade / UF</label><input value="${E(NF.city)}" oninput="NF.city=this.value"><label>Vacas no rebanho</label><input inputmode="numeric" value="${E(NF.cows)}" oninput="NF.cows=this.value"><label>Vacas em lactação</label><input inputmode="numeric" value="${E(NF.milking)}" oninput="NF.milking=this.value"><label>Meta de CCS (mil/mL)</label><input inputmode="decimal" value="${E(NF.goal)}" oninput="NF.goal=this.value"><br><br><button class="btn" onclick="addFarm()">Salvar fazenda</button></div>`}
-function addFarm(){const n=clean(NF.name).trim();if(!n)return note("Informe o nome da fazenda.");const cows=num(NF.cows),mil=num(NF.milking),g=num(NF.goal);
- if([cows,mil,g].some(x=>Number.isNaN(x)||(x!=null&&x<0)))return note("Valores numéricos inválidos.");if(mil!=null&&cows!=null&&mil>cows)return note("Vacas em lactação não pode ser maior que o rebanho.");
- const f={id:"u"+Date.now(),name:n,producer:clean(NF.producer)||"—",city:clean(NF.city)||"—",demo:false,cows:cows||0,milking:mil||0,liters:0,hours:6,ccs:[],cbt:[],prod:[],goalCcs:g||200,st:[],alerts:[],visits:[]};
- DB.farms.push(f);if(!svS()){DB.farms.pop();return note(FAIL)}farms.push(f);NF=newNF();go("farm",f.id);note("Fazenda salva e conferida no armazenamento do navegador.",1)}
+/* ===== cadastro de fazendas: ver js/11-fazendas.js ===== */
 /* ===== barra de estado e avisos ===== */
 function statusBar(){let h="";const A=(c,t)=>`<div class="alert ${c}" style="border-color:currentColor"><span style="color:var(--tx)">${t}</span></div>`;
  if(CORRUPT!==null)h+=A("cr","<b>Os dados salvos neste navegador estão ilegíveis.</b> Para proteger o original, nada será gravado agora.<br><button class=\"btn s\" onclick=\"bkRaw()\">Exportar texto original</button> <button class=\"btn s\" onclick=\"bkFresh()\">Começar do zero (mantém uma cópia)</button>");

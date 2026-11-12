@@ -58,7 +58,7 @@ const noErrors = errors => ok(errors.length === 0, "erros no console:\n  " + err
 /* Percorre todas as telas, setores e abas das duas fazendas demo. */
 async function visitAll(page) {
   const seen = [];
-  for (const v of [["home"], ["farm", "modelo"], ["kpi"], ["visit"], ["new"], ["backup"]]) {
+  for (const v of [["home"], ["farm", "modelo"], ["kpi"], ["visit"], ["new"], ["backup"], ["fdel"], ["farm", "critica"], ["kpi", "critica"]]) {
     await page.evaluate(a => go(...a), v); seen.push(v.join(":"));
   }
   for (const fid of ["modelo", "critica"]) for (let s = 0; s < 9; s++) {
@@ -99,6 +99,7 @@ const INVENTORY = {
   "Setor 7 – CIP": ["cip", "vCy", "vPq", "vWa", "vGc", "vBc", "vRc", "cysave", "psave", "wsave"],
   "Setor 8 – manutenção": ["man", "vEq", "vMt", "vPc", "vDx", "vG8", "vR8", "cls", "probs"],
   "Fazendas/visitas": ["home", "farm", "kpiv", "sector", "visit", "saveVisit", "newf", "addFarm"],
+  "Etapa 1 – Central": ["sstat", "falerts", "fkpi", "kpiGrid", "tchart", "farmCard", "ficha", "farmDelView", "farmDelete", "farmCounts", "openEdit", "sideNav", "sectorStrip", "bottomNav", "render", "withFarm", "goTab"],
   "Dados/backup": ["ldS", "svS", "migrate", "initData", "drSnap", "drRestore", "buildFile", "bkExport", "bkCopy", "bkAnalyze", "bkApply", "bkUndo", "bkv", "hashHex"],
 };
 test("integridade: inventário de funcionalidades presente no código", () => {
@@ -203,6 +204,187 @@ test("fluxo: rascunho do formulário é recuperado após recarregar", async () =
   } finally { await s.close(); }
 });
 
+/* ===================== 3b. Etapa 1: fazendas, indicadores reais, status, layout ===================== */
+const mkFarm = (p, o) => p.evaluate(o => { NF = Object.assign(newNF(), o); NFE = null; addFarm(); return V.f; }, o);
+const addAn = (p, fid, o) => p.evaluate(([fid, o]) => { go("sector", fid, 4); AF = Object.assign(newAF(), o); asave(); }, [fid, o]);
+const kpiOf = (p, fid) => p.evaluate(fid => Object.fromEntries(fkpi(farms.find(f => f.id == fid)).map(k => [k.lab, k.v])), fid);
+const statOf = (p, fid) => p.evaluate(fid => allStat(farms.find(f => f.id == fid)).map(s => s.st), fid);
+const reload = async p => { await p.evaluate(() => flushAll()); await p.reload(); await p.waitForFunction(() => typeof render == "function" && document.querySelector("#app").children.length > 0); };
+
+test("fazendas: cadastrar com todos os campos, consultar e editar (persistem após recarregar)", async () => {
+  const s = await open(), p = s.page;
+  try {
+    const fid = await mkFarm(p, { name: "Sítio A", producer: "Ana", phone: "(42) 99999-0000", email: "ana@exemplo.com", city: "Castro, PR", addr: "Estrada X km 4", cows: "60", milking: "48", liters: "1300", turns: "2", hours: "5", goal: "300", goalCbt: "100", obs: "Linha baixa" });
+    await reload(p);
+    const f = await p.evaluate(fid => ({ f: DB.farms.find(x => x.id == fid), g: DB.gl[fid] }), fid);
+    eq([f.f.name, f.f.phone, f.f.email, f.f.addr, f.f.cows, f.f.milking, f.f.liters, f.f.turns, f.f.hours, f.f.hoursSet, f.f.obs, f.g.ccs, f.g.cbt],
+      ["Sítio A", "(42) 99999-0000", "ana@exemplo.com", "Estrada X km 4", 60, 48, 1300, 2, 5, true, "Linha baixa", 300, 100], "cadastro salvo");
+    await p.evaluate(fid => go("sector", fid, 0), fid);
+    const t = await txt(p);
+    for (const x of ["Sítio A", "Ana", "Estrada X km 4", "1.300 L", "300 mil/mL", "Editar cadastro", "Excluir fazenda"]) ok(t.includes(x), "ficha sem: " + x);
+    await p.evaluate(fid => { openEdit(fid); NF.name = "Sítio A Editado"; NF.goal = "250"; NF.cows = "70"; addFarm(); }, fid);
+    await reload(p);
+    eq(await p.evaluate(fid => [DB.farms.length, DB.farms[0].name, DB.farms[0].cows, DB.gl[fid].ccs, DB.farms[0].id == fid], fid), [1, "Sítio A Editado", 70, 250, true], "edição (sem duplicar)");
+    // validações
+    for (const [o, msg] of [[{ name: "" }, "Informe o nome"], [{ name: "X", cows: "10", milking: "20" }, "não pode ser maior"], [{ name: "X", email: "abc" }, "E-mail inválido"], [{ name: "X", cows: "-1" }, "inválidos"]]) {
+      await mkFarm(p, o); ok((await txt(p)).includes(msg), "validação ausente: " + msg);
+    }
+    eq(await p.evaluate(() => DB.farms.length), 1, "fazendas inválidas não podem ser gravadas");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
+test("fazendas: excluir exige o nome; apaga só a fazenda escolhida; desfazer restaura", async () => {
+  const s = await open(), p = s.page;
+  try {
+    const a = await mkFarm(p, { name: "Fazenda A", goal: "200" }), b = await mkFarm(p, { name: "Fazenda B" });
+    await addAn(p, a, { ccs: "111" }); await addAn(p, b, { ccs: "222" }); await addAn(p, "modelo", { ccs: "333" });
+    await p.evaluate(a => { V.fd = a; V.fdName = "Fazenda Errada"; go("fdel"); farmDelete(); }, a);
+    ok((await txt(p)).includes("não confere"), "nome errado deveria bloquear");
+    eq(await p.evaluate(() => DB.farms.length), 2, "nada pode ser excluído com nome errado");
+    await p.evaluate(a => { V.fd = a; V.fdName = "  fazenda a "; farmDelete(); }, a);
+    const r = await p.evaluate(() => ({ farms: DB.farms.map(f => f.name), an: DB.an.map(x => x.ccs).sort(), gl: Object.keys(DB.gl), stored: JSON.parse(localStorage.getItem("mq_ord")).farms.length, demo: farms.filter(f => f.demo).length }));
+    eq(r, { farms: ["Fazenda B"], an: [222, 333], gl: [b], stored: 1, demo: 2 }, "depois de excluir A");
+    ok((await txt(p)).includes("excluída"), "confirmação de exclusão ausente");
+    await p.evaluate(() => { go("backup"); bkUndo(); bkUndo(); });
+    eq(await p.evaluate(() => [DB.farms.map(f => f.name).sort(), DB.an.length]), [["Fazenda A", "Fazenda B"], 3], "desfazer exclusão");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
+test("fazendas: as de demonstração não podem ser editadas nem excluídas", async () => {
+  const s = await open(), p = s.page;
+  try {
+    await p.evaluate(() => { openEdit("modelo"); V.fd = "modelo"; V.fdName = "Fazenda Modelo"; farmDelete(); go("sector", "modelo", 0); });
+    const t = await txt(p);
+    ok(t.includes("não podem ser editadas nem excluídas") && !t.includes("Editar cadastro"), "ficha demo deveria ser só leitura");
+    eq(await p.evaluate(() => farms.filter(f => f.demo).map(f => f.id)), ["modelo", "critica"], "fazendas demo");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
+test("indicadores: fazenda nova mostra “Sem dados” e nenhum número inventado", async () => {
+  const s = await open(), p = s.page;
+  try {
+    const fid = await mkFarm(p, { name: "Fazenda Vazia" });
+    const k = await kpiOf(p, fid);
+    ok(Object.values(k).every(v => v == null), "KPI com valor sem registro: " + JSON.stringify(k));
+    eq(await statOf(p, fid), ["wa", "sd", "sd", "sd", "sd", "sd", "sd", "sd", "sd"], "status dos setores");
+    eq(await p.evaluate(fid => falerts(farms.find(f => f.id == fid)).length, fid), 0, "alertas");
+    for (const v of ["farm", "kpi"]) {
+      await p.evaluate(([v, fid]) => go(v, fid), [v, fid]);
+      const n = await p.$$eval(".kv.sd", x => x.length);
+      ok(n >= 8, `${v}: esperava os KPIs como “Sem dados”, achei ${n}`);
+    }
+    ok(!/function series\(|series\(\d/.test(appSource()), "o gerador de séries fictícias ainda existe no código");
+    ok(!/alerts:\[\[/.test(appSource()) && !/st:\["(ok|wa|cr)"/.test(appSource()), "alertas ou status fixos ainda existem no código");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
+test("indicadores: usam os dados reais (análise acima da meta vira alerta e “Atenção”)", async () => {
+  const s = await open(), p = s.page;
+  try {
+    const fid = await mkFarm(p, { name: "Fazenda Real", cows: "50", milking: "40", liters: "1000", goal: "300" });
+    eq((await statOf(p, fid))[4], "sd", "S5 sem análise");
+    await addAn(p, fid, { date: "2026-10-01", ccs: "350", cbt: "40" });
+    let k = await kpiOf(p, fid);
+    eq([k.CCS, k.CBT, k["Litros/vaca"], k["Produção diária"], k["Vacas em lactação"]], ["350", "40", "25", "1.000", "40"], "KPIs");
+    eq((await statOf(p, fid))[4], "wa", "S5 acima da meta");
+    const al = await p.evaluate(fid => falerts(farms.find(f => f.id == fid)).map(a => a.t), fid);
+    ok(al.some(t => /CCS 350 .*acima da meta de 300/.test(t)), "alerta de CCS ausente: " + al);
+    await addAn(p, fid, { date: "2026-11-01", ccs: "250" });
+    eq((await statOf(p, fid))[4], "ok", "S5 dentro da meta");
+    eq(await p.evaluate(fid => falerts(farms.find(f => f.id == fid)).length, fid), 0, "alerta deveria sumir");
+    // teste de ordenha alimenta litros/hora e o setor 6
+    await p.evaluate(fid => { go("sector", fid, 5); V.o = "cro"; render(); dset("milker", "X"); dset("litros", "900"); dset("vacas", "40"); dset("dur", "90"); T.n = "1"; tstart(); T.acc = 30; tfin(); tsave(); ssave(); }, fid);
+    k = await kpiOf(p, fid);
+    eq([k["Litros/hora"], k["Litros/vaca"]], ["600", "22,5"], "KPIs do teste de ordenha");
+    eq((await statOf(p, fid))[5], "in", "S6 com teste registrado");
+    await p.evaluate(fid => go("kpi", fid), fid);
+    eq(await p.$$eval("svg.chart", x => x.length), 4, "gráficos com dados (CCS, CBT, L/h, L/vaca)");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
+test("isolamento: registros de uma fazenda não aparecem em outra nem nas demo", async () => {
+  const s = await open(), p = s.page;
+  try {
+    const a = await mkFarm(p, { name: "A", goal: "100" }), b = await mkFarm(p, { name: "B" });
+    await addAn(p, a, { ccs: "777" });
+    eq((await kpiOf(p, b)).CCS, null, "CCS de A apareceu em B");
+    eq((await kpiOf(p, a)).CCS, "777", "CCS de A");
+    ok(!(await kpiOf(p, "modelo")).CCS.includes("777"), "CCS de A apareceu na demo");
+    await p.evaluate(() => go("home"));
+    const cards = await p.$$eval(".fcard", x => x.map(c => c.textContent));
+    ok(cards.filter(t => t.includes("777")).length === 1, "a CCS 777 deveria aparecer só no cartão de A");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
+test("status: fazendas demo calculadas a partir dos registros DEMO, identificadas como demonstração", async () => {
+  const s = await open(), p = s.page;
+  try {
+    const m = await statOf(p, "modelo"), c = await statOf(p, "critica");
+    eq([m[3], c[3]], ["sd", "sd"], "setor 4 sem módulo deve ser Sem dados");
+    eq(c[7], "cr", "Fazenda Crítica com revisões atrasadas (registros DEMO)");
+    await p.evaluate(() => go("farm", "critica"));
+    const t = await txt(p);
+    ok(t.includes("DEMONSTRAÇÃO") && t.includes("Fazenda de demonstração") && t.includes("fictícios"), "aviso de demonstração ausente");
+    await p.evaluate(() => go("home"));
+    ok(/Fazendas de demonstração/.test(await txt(p)), "seção de demonstração ausente na lista");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
+test("tetos: avaliação manual identificada; nenhuma IA apresentada como diagnóstico", async () => {
+  const s = await open(), p = s.page;
+  try {
+    await p.evaluate(() => { V.q = "te"; go("sector", "critica", 4); });
+    const t = await txt(p);
+    ok(t.includes("Avaliação manual") && t.includes("não faz análise automática de imagens (IA)") && t.includes("não são diagnósticos"), "aviso de avaliação manual ausente");
+    ok(!/IA, com confirmação/.test(appSource()), "texto antigo sugerindo IA ainda existe");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
+test("layout: menu lateral no computador; barra inferior e faixa de setores no celular", async () => {
+  const vis = (p, sel) => p.evaluate(sel => { const e = document.querySelector(sel); return !!e && getComputedStyle(e).display != "none" && e.getBoundingClientRect().width > 0; }, sel);
+  const d = await open({ viewport: { width: 1366, height: 900 } });
+  try {
+    await d.page.evaluate(() => go("sector", "modelo", 4));
+    eq([await vis(d.page, "#side"), await vis(d.page, "#nav"), await vis(d.page, ".strip")], [true, false, false], "computador (menu lateral, barra, faixa)");
+    eq(await d.page.$$eval("#side .si", x => x.length), 14, "itens do menu lateral (3 + 9 setores + 2)");
+    await d.page.click("#side >> text=6. Otimização da ordenha");
+    eq(await d.page.evaluate(() => [V.v, V.s]), ["sector", 5], "navegar pelo menu lateral");
+    noErrors(d.errors);
+  } finally { await d.close(); }
+  const m = await open();
+  try {
+    await m.page.evaluate(() => go("sector", "modelo", 4));
+    eq([await vis(m.page, "#side"), await vis(m.page, "#nav"), await vis(m.page, ".strip")], [false, true, true], "celular (menu lateral, barra, faixa)");
+    await m.page.click(".strip button:nth-child(8)");
+    eq(await m.page.evaluate(() => V.s), 7, "navegar pela faixa de setores");
+    noErrors(m.errors);
+  } finally { await m.close(); }
+});
+
+test("migração v2 → v3: a meta de CCS do cadastro vira meta de qualidade; dados preservados", async () => {
+  const s = await open(), p = s.page;
+  try {
+    await p.evaluate(() => {
+      const v2 = { sessions: [], drafts: {}, an: [{ id: "a1", fid: "u1", demo: false, date: "2026-10-01", ccs: 250 }], ts: [], ev: [], cy: [], pq: [], wa: [], eq: [], cmp: [], pl: [], sv: [], dx: [], pc: [], dg: [], rf: [], vs: [],
+        farms: [{ id: "u1", name: "Antiga", producer: "—", city: "—", demo: false, cows: 10, milking: 8, liters: 0, hours: 6, ccs: [], cbt: [], prod: [], goalCcs: 200, st: [], alerts: [], visits: [] }],
+        gl: {}, ob: {}, cr: {}, rp: {}, rm: {}, meta: { ver: 2, migrated: [{ from: 1, to: 2, at: "2026-11-11T00:00:00Z" }] } };
+      localStorage.setItem("mq_ord", JSON.stringify(v2));
+    });
+    await p.reload(); await p.waitForFunction(() => typeof render == "function");
+    const r = await p.evaluate(() => ({ ver: DB.meta.ver, gl: DB.gl.u1, an: DB.an.length, mig: DB.meta.migrated.map(m => m.from + ">" + m.to), st: allStat(farms.find(f => f.id == "u1"))[4].st, lh: fkpi(farms.find(f => f.id == "u1")).find(k => k.lab == "Litros/hora").v }));
+    eq(r, { ver: 3, gl: { ccs: 200 }, an: 1, mig: ["1>2", "2>3"], st: "wa", lh: null }, "migração");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
 /* ===================== 4. Backup ===================== */
 async function exportFile(p) {
   await p.evaluate(() => go("backup"));
@@ -225,6 +407,7 @@ test("backup: o backup de 11/11 é aceito pela tela de importação", async () =
     await p.waitForFunction(() => BK.rep);
     const t = await txt(p);
     for (const c of ["Formato MilkIQ reconhecido", "Integridade confirmada (sha256)", "Estrutura e identificadores válidos"]) ok(t.includes(c), "faltou: " + c);
+    if (APP === "index.html") ok(t.includes("Versão dos dados do arquivo: v2 (será atualizada para v3)"), "backup v2 deveria ser atualizado para v3");
     await p.click("text=Importar (adicionar novos)");
     ok(/Importação concluída e verificada/.test(await txt(p)), "importação não concluída");
     noErrors(s.errors);

@@ -31,7 +31,10 @@ Para testar outra cópia do app: `MILKIQ_APP=legacy/milkiq-original-etapa1-2026-
 index.html        página principal (carrega css/ e js/ na ordem)
 css/app.css       estilos
 js/01-base.js     setores, telas principais, navegação
-js/02-…09-*.js    armazenamento, setores 6/5/7/8, dados e fazendas, backup, início
+js/02-…08-*.js    armazenamento, setores 6/5/7/8, dados, backup (código original)
+js/10-central.js  Central da Fazenda, indicadores reais, status, alertas, gráficos, menus
+js/11-fazendas.js cadastro, ficha, edição e exclusão de fazendas
+js/99-inicio.js   partida do app
 tools/bundle.js   gera o arquivo único dist/milkiq.html
 legacy/           cópia original congelada (não editar) + SHA256SUMS
 tests/run.js      testes automatizados
@@ -44,26 +47,31 @@ O código foi importado do artifact do Claude "MilkIQ · Leite IA" (build `etapa
 
 ## Módulos (Central da Fazenda, 9 setores)
 
+Cada fazenda tem sua Central, com indicadores, alertas e os 9 setores. O status de cada setor é **calculado a partir dos registros**:
+- **Sem dados**: não há nenhum registro;
+- **Bom / Atenção / Crítico**: só quando existe um critério (metas definidas por você, faixas cadastradas, prazos de revisão);
+- **Não avaliado / Sem meta**: há dados, mas nenhum critério para avaliá-los.
+
 | # | Setor | Estado |
 |---|-------|--------|
-| 1 | Cadastro da fazenda | Cadastro de fazendas funcionando (tela "Cadastrar fazenda") |
-| 2 | Ordenhadeiras e equipamentos | Planejado (placeholder) |
-| 3 | ISO Check | Planejado (placeholder) |
-| 4 | Testes técnicos | Planejado (placeholder) |
-| 5 | Qualidade do leite | **Funcional**: análises, evolução, antes/depois, tetos com fotos, indicadores/metas, relatório |
-| 6 | Otimização da ordenha | **Funcional**: cronômetro por vaca, comparação entre turnos, ranking, gráficos, histórico, relatório, calculadoras |
-| 7 | Limpeza CIP e químicos | **Funcional**: lavagens CIP, produtos químicos, análises de água |
-| 8 | Manutenção preventiva | **Funcional**: equipamentos, componentes, revisões, serviços, medições, peças, diagramas, referências |
-| 9 | Documentos e relatórios | Planejado (placeholder) |
+| 1 | Cadastro da fazenda | **Funcional**: cadastrar, consultar (ficha), editar e excluir com confirmação + desfazer |
+| 2 | Ordenhadeiras e equipamentos | Mostra os equipamentos do Setor 8; módulo próprio na Etapa 2 |
+| 3 | ISO Check | Mostra as medições do Diagnóstico (Setor 8); módulo próprio na Etapa 3 |
+| 4 | Testes técnicos | Planejado |
+| 5 | Qualidade do leite | **Funcional**: análises, evolução, antes/depois, tetos (escore manual, sem IA), indicadores/metas, relatório |
+| 6 | Otimização da ordenha | **Funcional**: cronômetro, comparação entre ordenhas, ranking, gráficos, histórico, relatório, calculadoras |
+| 7 | Limpeza CIP e químicos | **Funcional**: lavagens, produtos/estoque, água, gráficos, antes/depois, relatório |
+| 8 | Manutenção preventiva | **Funcional**: equipamentos, revisões, serviços, peças, diagramas, diagnóstico, relatório |
+| 9 | Documentos e relatórios | Atalhos para os relatórios de cada setor |
 
-Outras telas: Fazendas, Indicadores, Nova visita, Dados e backup.
+Outras telas: Fazendas, Indicadores (KPIs e gráficos reais), Visitas, Dados e backup. No computador, o menu fica na lateral; no celular, ficam a barra inferior e a faixa de setores.
 
 ## Dados
 
 - Tudo fica no `localStorage` do navegador: não sincroniza entre aparelhos.
 - As chaves são `mq_ord` (banco principal), `mq_draft` (rascunhos), `mq_snap` (cópia para desfazer importação), `mq_pre_v2` e `mq_user` (dados legados).
 - As fazendas de demonstração (`modelo`, `critica`) são geradas no código e nunca entram no backup como dados reais.
-- O backup `.json` (formato `milkiq-backup` v1) leva uma assinatura SHA-256 do corpo e é validado antes de qualquer importação.
+- O backup `.json` (formato `milkiq-backup` v1) leva uma assinatura SHA-256 do corpo e é validado antes de qualquer importação. A versão dos dados atual é a **v3**: backups v1 e v2 são convertidos ao importar. A cópia original em `legacy/` (v2) recusa dados v3 sem alterá-los.
 
 `milkiq-backup-20261111-2235.json` é um backup exportado em 11/11/2026. Ele está vazio: 0 registros reais e só um rascunho do cronômetro.
 
