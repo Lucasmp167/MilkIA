@@ -8,7 +8,7 @@
  */
 ST.sd = "Sem dados"; ST.in = "Registrado";
 const RANK = { cr: 4, wa: 3, ok: 2, in: 1, na: 1, sd: 0 };
-const TABKEY = { 1: "e2t", 2: "i3v", 3: "t4v", 4: "q", 5: "o", 6: "c", 7: "m8" }; // aba ativa de cada setor com abas
+const TABKEY = { 1: "e2t", 2: "i3v", 3: "t4v", 8: "r9v", 4: "q", 5: "o", 6: "c", 7: "m8" }; // aba ativa de cada setor com abas
 
 function withFarm(id, fn) { const old = V.f; V.f = id; try { return fn(); } finally { V.f = old; } }
 const fmtD = d => d ? String(d).slice(0, 10).split("-").reverse().join("/") : "—";
@@ -76,7 +76,9 @@ const SSTAT = [
     const st = c("atrasada") ? "cr" : c("próxima") ? "wa" : c("em dia") ? "ok" : "na";
     return { st, t: `${c("atrasada")} atrasada(s) · ${c("próxima")} próxima(s) · ${c("em dia")} em dia` };
   },
-  /* 9 Documentos */ () => {
+  /* 9 Documentos — plano de ação (prazos definidos pelo usuário) */ () => {
+    const pa = L("pa"), op = pa.filter(a => a.st != "Concluída"), late = op.filter(paLate);
+    if (pa.length) return { st: late.length ? "wa" : "in", lab: late.length ? "Ações atrasadas" : "Plano de ação", t: `${op.length} ação(ões) em aberto${late.length ? ` · ${late.length} atrasada(s)` : ""} · relatório da visita disponível` };
     const has = [["Qualidade", QA().length || QT().length], ["Ordenha", SS().length], ["CIP", CYS().length], ["Manutenção", L("eq").length]].filter(x => x[1]).map(x => x[0]);
     return has.length ? { st: "in", lab: "Disponível", t: "Relatórios: " + has.join(", ") } : { st: "sd", t: "Nenhum relatório disponível ainda" };
   }];
@@ -114,6 +116,7 @@ function falerts(f) {
         const d = lastOf(L("dx").filter(x => x.eid == e.id)); if (!d) return;
         evalDx(d, e).probs.forEach(p => A.push({ l: p.g == "Alta" ? "cr" : "wa", t: `${eqt(e)} (${fmtD(d.date)}): ${p.t}`, s: 1, tab: "med", eid: e.id }));
       });
+      L("pa").filter(paLate).forEach(a => add("wa", `Ação atrasada (prazo ${fmtD(a.prazo)}): ${a.desc}`, 8, "pa"));
     } catch (e) { add("wa", "Não foi possível calcular todos os alertas desta fazenda", 0); }
     return A.sort((a, b) => (RANK[b.l] || 0) - (RANK[a.l] || 0));
   });
@@ -240,7 +243,6 @@ function kpiv() {
 
 /* Complementos das telas dos setores 2, 3 e 9 (ainda sem módulo próprio): mostram o que já existe. */
 const SEXTRA = {
-  8: f => `<h2>Relatórios disponíveis</h2><div class="ctr">${[[4, "🥛 Qualidade do leite"], [5, "⏱️ Otimização da ordenha"], [6, "🧼 Limpeza CIP"], [7, "🛠️ Manutenção"], [2, "📏 ISO Check"], [3, "🔧 Testes técnicos"]].map(([s, l]) => { const st = sstat(f, s); return `<button class="sec" style="min-height:0" onclick="goTab(${s},'rl')"><b>${l}</b>${badge(st.st == "sd" ? st : { st: "in", lab: "Abrir relatório" })}</button>`; }).join("")}</div>`
 };
 
 /* ---------- navegação: menu lateral (computador), faixa de setores e barra inferior (celular) ---------- */

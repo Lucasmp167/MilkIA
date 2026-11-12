@@ -63,6 +63,7 @@ js/00-ambiente.js separa os dados da versão de testes
 js/13-offline.js  IndexedDB, conexão, instalação e atualização
 js/14-iso.js      Setor 3: ISO Check e biblioteca de referências
 js/15-testes.js   Setor 4: leite residual, testes de campo, relatórios externos
+js/16-relatorios.js Setor 9: relatório da visita e plano de ação
 legacy/           cópia original congelada (não editar) + SHA256SUMS
 tests/run.js      testes automatizados
 *.json            backup de 11/11 (usado como teste)
@@ -89,7 +90,7 @@ Cada fazenda tem sua Central, com indicadores, alertas e os 9 setores. O status 
 | 6 | Otimização da ordenha | **Funcional**: cronômetro, comparação entre ordenhas, ranking, gráficos, histórico, relatório, calculadoras |
 | 7 | Limpeza CIP e químicos | **Funcional**: lavagens, produtos/estoque, água, gráficos, antes/depois, relatório |
 | 8 | Manutenção preventiva | **Funcional**: equipamentos, revisões, serviços, peças, diagramas, diagnóstico, relatório |
-| 9 | Documentos e relatórios | Atalhos para os relatórios de cada setor |
+| 9 | Documentos e relatórios | **Funcional**: relatório consolidado da visita (período ou visita, indicadores, alertas, registros de todos os setores, plano de ação, considerações, assinaturas), plano de ação com responsável/prazo/situação (criado a partir dos alertas; atrasos viram alerta), atalhos para os relatórios de cada setor |
 
 Outras telas: Fazendas, Indicadores (KPIs e gráficos reais), Visitas, Dados e backup. No computador, o menu fica na lateral; no celular, ficam a barra inferior e a faixa de setores.
 

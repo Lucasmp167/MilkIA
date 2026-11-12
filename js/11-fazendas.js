@@ -56,7 +56,7 @@ function addFarm() {
 function farmCounts(id) {
   const eids = new Set(DB.eq.filter(e => e.fid == id).map(e => e.id)), out = [];
   ARR.forEach(k => { if (k == "farms") return; const n = DB[k].filter(r => r.fid == id).length; if (n) out.push({ k, lab: LAB[k], n }); });
-  MAP.forEach(k => { const n = Object.keys(DB[k] || {}).filter(key => k == "rm" ? eids.has(key) : key == id).length; if (n) out.push({ k, lab: LAB[k], n }); });
+  MAP.forEach(k => { const n = Object.keys(DB[k] || {}).filter(key => k == "rm" ? eids.has(key) : key == id || key.startsWith(id + "_")).length; if (n) out.push({ k, lab: LAB[k], n }); });
   if (DB.drafts[id]) out.push({ k: "drafts", lab: "Rascunho de teste de ordenha", n: 1 });
   return out;
 }
@@ -94,7 +94,7 @@ function farmDelete() {
   const id = f.id, eids = new Set(DB.eq.filter(e => e.fid == id).map(e => e.id)), c = cp(DB); ensureDB(c);
   let removed = 0;
   ARR.forEach(k => { const n = c[k].length; c[k] = k == "farms" ? c[k].filter(x => x.id != id) : c[k].filter(x => x.fid != id); removed += n - c[k].length; });
-  MAP.forEach(k => Object.keys(c[k]).forEach(key => { if (k == "rm" ? eids.has(key) : key == id) { delete c[k][key]; removed++; } }));
+  MAP.forEach(k => Object.keys(c[k]).forEach(key => { if (k == "rm" ? eids.has(key) : key == id || key.startsWith(id + "_")) { delete c[k][key]; removed++; } }));
   delete c.drafts[id];
   c.meta.ops = arr1(c.meta.ops).concat([{ at: new Date().toISOString(), op: "excluir-fazenda", farm: f.name, id, removed }]).slice(-20);
   try { const s = JSON.stringify(c); localStorage.setItem("mq_ord", s); if (localStorage.getItem("mq_ord") !== s) throw Error("verificação"); }

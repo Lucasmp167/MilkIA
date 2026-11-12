@@ -103,6 +103,7 @@ const INVENTORY = {
   "Etapa 2 – Equipamentos": ["eqv", "eqList", "eqForm", "eqSave", "eqDetail", "eqResumo", "eqMed", "eqCmp", "eqHist", "eqReport", "eqCompare", "eqRefs", "eqSchema", "evalDx", "estat", "epend", "refFor", "judge", "addPt", "e2dgSave", "eqTimeline"],
   "Etapa 3 – ISO Check": ["isov", "isoList", "isoForm", "isoSave", "isoDetail", "isoCompare", "isoCmpTable", "evalIso", "refLib", "isoDel", "isoSig", "isoAddPul"],
   "Setor 4 – Testes técnicos": ["tt4", "ttTab", "ttForm", "ttSave", "ttDetail", "ttCompare", "ttAddRow", "ttFile", "lrStats", "ttDel"],
+  "Setor 9 – Relatórios": ["r9", "visReport", "paView", "paSave", "paSet", "paFromAlert", "secReports", "rset9"],
   "Offline / PWA": ["idbMirror", "bootOffline", "restoreFromIdb", "askPersist", "swRegister", "swUpdate", "offlineCard", "installCard", "netNotice"],
   "Etapa 1 – Central": ["sstat", "falerts", "fkpi", "kpiGrid", "tchart", "farmCard", "ficha", "farmDelView", "farmDelete", "farmCounts", "openEdit", "sideNav", "sectorStrip", "bottomNav", "render", "withFarm", "goTab"],
   "Dados/backup": ["ldS", "svS", "migrate", "initData", "drSnap", "drRestore", "buildFile", "bkExport", "bkCopy", "bkAnalyze", "bkApply", "bkUndo", "bkv", "hashHex"],
@@ -385,7 +386,7 @@ test("migração v2 → v3: a meta de CCS do cadastro vira meta de qualidade; da
     });
     await p.reload(); await p.waitForFunction(() => window.MQ_READY === true);
     const r = await p.evaluate(() => ({ ver: DB.meta.ver, gl: DB.gl.u1, an: DB.an.length, mig: DB.meta.migrated.map(m => m.from + ">" + m.to), st: allStat(farms.find(f => f.id == "u1"))[4].st, lh: fkpi(farms.find(f => f.id == "u1")).find(k => k.lab == "Litros/hora").v }));
-    eq(r, { ver: 5, gl: { ccs: 200 }, an: 1, mig: ["1>2", "2>3", "3>4", "4>5"], st: "wa", lh: null }, "migração");
+    eq(r, { ver: 6, gl: { ccs: 200 }, an: 1, mig: ["1>2", "2>3", "3>4", "4>5", "5>6"], st: "wa", lh: null }, "migração");
     noErrors(s.errors);
   } finally { await s.close(); }
 });
@@ -675,6 +676,52 @@ test("testes técnicos: leite residual por vaca/quarto, estatística, referênci
   } finally { await s.close(); }
 });
 
+/* ===================== 3g. Setor 9: relatório da visita e plano de ação ===================== */
+test("relatórios: relatório da visita junta só os registros do período; plano de ação com prazo vira alerta", async () => {
+  const s = await open(), p = s.page;
+  try {
+    const fid = await mkFarm(p, { name: "Fazenda Rel9", goal: "300" });
+    await addAn(p, fid, { date: "2026-10-20", ccs: "350" }); await addAn(p, fid, { date: "2026-01-05", ccs: "111" });
+    await p.evaluate(fid => { go("visit"); VF = Object.assign(newVF(), { fid, date: "2026-10-25", tipo: "Qualidade do leite", notas: "Notas da visita" }); saveVisit(); }, fid);
+    await p.evaluate(fid => { go("sector", fid, 8); V.r9v = "vis"; V.r9vis = DB.vs[0].id; render(); }, fid);
+    let t = await txt(p);
+    ok(t.includes("Relatório da visita técnica") && t.includes("Notas da visita") && t.includes("350") && !t.includes("111") && t.includes("Período: 25/09/2026 a 25/10/2026"), "conteúdo do relatório: " + t.slice(0, 400));
+    ok(!/DEMO|fictíc/.test(t), "relatório real com texto de demonstração");
+    // plano de ação: criar a partir de um alerta, prazo vencido → alerta; concluir → some
+    await p.evaluate(() => { V.r9v = "pa"; render(); });
+    await p.click("text=+ ação");
+    await p.evaluate(() => { PAF.resp = "João"; PAF.prazo = "2026-01-01"; paSave(); });
+    eq(await p.evaluate(() => [DB.pa.length, DB.pa[0].s, DB.pa[0].desc.startsWith("CCS 350")]), [1, "4", true], "ação criada do alerta");
+    ok(await p.evaluate(fid => falerts(farms.find(f => f.id == fid)).some(a => a.s == 8 && a.t.startsWith("Ação atrasada")), fid), "alerta de ação atrasada");
+    eq(await p.evaluate(fid => sstat(farms.find(f => f.id == fid), 8).st, fid), "wa", "status do Setor 9");
+    await p.evaluate(() => paSet(DB.pa[0].id, "Concluída"));
+    ok(!(await p.evaluate(fid => falerts(farms.find(f => f.id == fid)).some(a => a.s == 8), fid)), "ação concluída não pode gerar alerta");
+    await p.evaluate(() => { V.r9v = "vis"; render(); rset9("obs", "Considerações X"); flushAll(); });
+    await p.evaluate(() => render());
+    ok((await txt(p)).includes("Considerações X"), "considerações do técnico");
+    noErrors(s.errors);
+  } finally { await s.close(); }
+});
+
+test("backup: observações do relatório de qualidade (texto) não impedem a importação", async () => {
+  const s = await open(), p = s.page; let exp;
+  try {
+    const fid = await mkFarm(p, { name: "Fazenda Obs" });
+    await p.evaluate(() => { obs("Observação do técnico"); flushAll(); rset9("obs", "Considerações"); flushAll(); });
+    exp = await exportFile(p);
+  } finally { await s.close(); }
+  const s2 = await open(), p2 = s2.page;
+  try {
+    await p2.evaluate(() => go("backup"));
+    await p2.setInputFiles('input[type=file][accept*=json]', exp.file);
+    await p2.waitForFunction(() => BK.rep);
+    eq(await p2.evaluate(() => [BK.rep.ok, BK.rep.errors]), [true, []], "verificação do backup");
+    await p2.click("text=Importar (adicionar novos)");
+    eq(await p2.evaluate(() => Object.values(DB.ob).map(v => typeof v == "string" ? v : v.obs)), ["Observação do técnico", "Considerações"], "observações importadas");
+    noErrors(s2.errors);
+  } finally { await s2.close(); }
+});
+
 /* ===================== 3d. Offline-first: site publicado, modo avião, banco do aparelho ===================== */
 let SITE = null;
 function buildSiteOnce() {
@@ -796,7 +843,7 @@ test("backup: o backup de 11/11 é aceito pela tela de importação", async () =
     await p.waitForFunction(() => BK.rep);
     const t = await txt(p);
     for (const c of ["Formato MilkIQ reconhecido", "Integridade confirmada (sha256)", "Estrutura e identificadores válidos"]) ok(t.includes(c), "faltou: " + c);
-    if (APP === "index.html") ok(t.includes("Versão dos dados do arquivo: v2 (será atualizada para v5)"), "backup v2 deveria ser atualizado para v4");
+    if (APP === "index.html") ok(t.includes("Versão dos dados do arquivo: v2 (será atualizada para v6)"), "backup v2 deveria ser atualizado para v4");
     await p.click("text=Importar (adicionar novos)");
     ok(/Importação concluída e verificada/.test(await txt(p)), "importação não concluída");
     noErrors(s.errors);
